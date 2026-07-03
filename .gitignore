@@ -1,0 +1,61 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+private/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Java / Gradle
+.gradle/
+build/
+out/
+*.class
+
+# IDE
+.idea/
+.vscode/settings.json
+.vscode/*.code-workspace
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Trading runtime data
+runs/**
+!runs/.gitkeep
+logs/**
+!logs/.gitkeep
+data/raw/**
+data/processed/**
+reports/private/**
+
+# Local deployment files
+configs/deployments/live*.yaml
+configs/deployments/*production*.yaml
+configs/exchanges/*live*.yaml
+
+# API/account/trade exports
+*api-key*
+*secret*
+*account-export*
+*trade-export*
+*balance-export*
