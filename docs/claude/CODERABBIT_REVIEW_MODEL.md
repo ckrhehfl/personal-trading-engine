@@ -51,7 +51,7 @@
 | **docs only** | ✅ | 없음(기본 gate로 충분) |
 | **Claude 설정 / agents / skills / hooks** | ✅ | 변경 파일 목록을 명시적으로 확인(의도치 않은 파일 포함 여부) |
 | **schema (`schemas/**`)** | ✅ | schema validation 통과 + Python/Java 양쪽 호환 확인 |
-| **Python backtest (`python/**`)** | ✅ | Python tests 통과 + bias 체크리스트(4절) 확인 |
+| **Python backtest (`python/**`)** | ✅ | Python tests 통과 + `docs/06_VALIDATION_POLICY.md` §4 편향 체크리스트 확인 |
 | **Java OMS/Risk/Execution (`java/**`)** | ✅ | Java tests 통과 + **두 번째 AI 리뷰** |
 | **live / API key / leverage / risk 완화** | — | **현재 단계에서는 merge 금지** (아래 5절) |
 

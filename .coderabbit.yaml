@@ -88,11 +88,13 @@ reviews:
       - name: "No risk or leverage relaxation"
         mode: "error"
         instructions: >-
-          다음 중 하나라도 발견되면 FAIL: leverage 한도 상향(예: canary 2x, stable 3x
-          초과), daily/weekly/monthly loss limit 또는 hard stop 완화, 1회 주문 최대
-          notional·심볼 exposure 한도 상향, market order guard 완화, kill switch
-          발동 조건 약화 또는 우회. 이러한 변경이 없으면 PASS. 있으면 human approval
-          필요 항목으로 지적하고 FAIL.
+          docs/05_RISK_POLICY.md 에 정의된 현재 leverage/loss limit/notional/exposure
+          한도를 source of truth로 삼는다. 다음 중 하나라도 발견되면 FAIL: 해당 문서의
+          canary/stable leverage 상한 초과, daily/weekly/monthly loss limit 또는 hard
+          stop 완화, 1회 주문 최대 notional·심볼 exposure 한도 상향, market order guard
+          완화, kill switch 발동 조건 약화 또는 우회. 구체적 수치는 이 파일이 아니라
+          05_RISK_POLICY.md 최신 값을 기준으로 판단한다. 위 위반이 없으면 PASS. 있으면
+          human approval 필요 항목으로 지적하고 FAIL.
       - name: "Python cannot place live orders"
         mode: "error"
         instructions: >-
