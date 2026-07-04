@@ -42,6 +42,12 @@ Java Trading Plane
 - Paper/Live runtime
 ```
 
+## Documentation
+
+Start with [`docs/00_INDEX.md`](docs/00_INDEX.md) — the documentation index and
+source-of-truth registry. Review/merge governance lives in
+[`docs/claude/CODERABBIT_REVIEW_MODEL.md`](docs/claude/CODERABBIT_REVIEW_MODEL.md).
+
 ## First Milestones
 
 1. Add docs and architecture decisions

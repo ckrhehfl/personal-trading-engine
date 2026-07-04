@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit 리뷰 설정 — personal-trading-engine
+# 이 저장소는 실거래가 가능해질 수 있는 BTC/USDT 선물 트레이딩 시스템이다.
+# 리뷰의 최우선 기준은 저장소 루트의 CLAUDE.md 이며, 그 다음이 docs/ 정책 문서다.
+# 상세한 merge gate 기준은 docs/claude/CODERABBIT_REVIEW_MODEL.md 참고.
+
+language: "ko-KR"
+
+tone_instructions: >-
+  이 저장소는 실거래가 가능한 트레이딩 시스템이다. CLAUDE.md와 docs의 리스크·보안
+  정책을 최우선 기준으로 한국어로 리뷰하라. 명확성보다 안전을 우선하고, 위험한
+  변경은 단호하게 지적하라.
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  review_status: true
+  commit_status: true
+  fail_commit_status: true
+  poem: false
+  collapse_walkthrough: false
+  sequence_diagrams: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+
+  path_instructions:
+    - path: "**"
+      instructions: >-
+        CLAUDE.md를 최우선 기준으로 검토한다. 다음은 이 PR에서 절대 허용되지 않으며
+        발견 시 반드시 지적한다: (1) Python이 거래소에 직접 live order를 보내는 경로,
+        (2) Java Trading Plane / Java Risk Gateway를 우회하는 live order 경로,
+        (3) API key·secret·token·password·private key 하드코딩 또는 .env / secrets/ /
+        credentials/ 접근, (4) live trading 활성화(LIVE_TRADING_ENABLED=true,
+        live_trading=true 등), (5) leverage limit 상향, (6) risk limit 또는 loss
+        limit 완화, (7) market order guard 약화, (8) kill switch 약화·우회.
+        모든 live order 경로는 Java Trading Plane과 Java Risk Gateway를 통과해야 한다.
+    - path: "python/**"
+      instructions: >-
+        Python Research Plane 코드다. 다음을 중점 검토한다: lookahead bias(미래 데이터
+        참조), data leakage, same-candle execution(같은 봉 종가로 같은 봉 체결),
+        수수료/슬리피지 누락, 재현 불가능한 비결정성(고정 seed 여부, 시간 의존),
+        그리고 Python이 거래소에 직접 주문을 보내는 live order path가 새로 생기는지.
+        Python은 backtest/research/ML만 담당하며 live order를 직접 보내면 안 된다.
+    - path: "java/**"
+      instructions: >-
+        Java Trading Plane 코드다. 다음을 중점 검토한다: OMS state transition의
+        정확성, 중복 주문(duplicate order) 방지, idempotency(client order id),
+        partial fill 처리, cancel/replace, retry 시 중복 주문 위험, position
+        reconciliation, kill switch 동작, 그리고 Risk Gateway가 모든 주문 경로에서
+        강제되는지. Risk Gateway를 우회하는 경로는 허용하지 않는다.
+    - path: "schemas/**"
+      instructions: >-
+        Python/Java가 공유하는 계약 스키마다. 다음을 검토한다: Python(pydantic)과
+        Java(Jackson) 간 호환성, breaking change 여부, 버전 관리와 변경 문서화.
+        breaking change는 양쪽 코드/테스트 동시 갱신이 없으면 지적한다.
+    - path: "configs/**"
+      instructions: >-
+        설정 파일이다. 다음을 발견하면 반드시 지적한다: live trading flag 활성화,
+        leverage 상향, risk/loss limit 완화, production/live deployment 활성화,
+        실제 credential 또는 API key 참조. 이 값들의 변경은 human approval 대상이다.
+    - path: "docs/**"
+      instructions: >-
+        문서 변경이다. 각 문서의 source-of-truth 상태(source of truth / reference /
+        snapshot / archive)를 존중한다. docs/12_ALL_IN_ONE_SPEC.md 는 계속 갱신하는
+        주 문서가 아니라 snapshot/reference 이므로 여기에 새 결정을 추가하지 않는다.
+        docs/00_INDEX.md 의 registry와 일치하는지, CLAUDE.md·05_RISK_POLICY·
+        06_VALIDATION_POLICY·11_DECISION_LOG 와 모순되지 않는지 확인한다.
+
+  pre_merge_checks:
+    custom_checks:
+      - name: "No live trading enablement"
+        mode: "error"
+        instructions: >-
+          다음 중 하나라도 diff에 추가되면 FAIL: LIVE_TRADING_ENABLED 를 true 로
+          설정, live_trading: true / live_trading=true, live/production deployment
+          를 활성화하는 설정, live trading을 켜는 코드 경로. 위 변경이 전혀 없으면 PASS.
+      - name: "No secrets or credential access"
+        mode: "error"
+        instructions: >-
+          다음 중 하나라도 발견되면 FAIL: 하드코딩된 API key·secret·token·password·
+          private key, .env / .env.* 파일 내용 추가 또는 커밋, secrets/ 또는
+          credentials/ 경로의 실제 자격증명 파일 추가, BingX 실제 credential 추가.
+          .env.example 의 빈 placeholder 값은 허용(PASS). 위 위반이 없으면 PASS.
+      - name: "No risk or leverage relaxation"
+        mode: "error"
+        instructions: >-
+          docs/05_RISK_POLICY.md 에 정의된 현재 leverage/loss limit/notional/exposure
+          한도를 source of truth로 삼는다. 다음 중 하나라도 발견되면 FAIL: 해당 문서의
+          canary/stable leverage 상한 초과, daily/weekly/monthly loss limit 또는 hard
+          stop 완화, 1회 주문 최대 notional·심볼 exposure 한도 상향, market order guard
+          완화, kill switch 발동 조건 약화 또는 우회. 구체적 수치는 이 파일이 아니라
+          05_RISK_POLICY.md 최신 값을 기준으로 판단한다. 위 위반이 없으면 PASS. 있으면
+          human approval 필요 항목으로 지적하고 FAIL.
+      - name: "Python cannot place live orders"
+        mode: "error"
+        instructions: >-
+          python/** 에서 거래소에 직접 실주문을 보내는 경로가 새로 생기면 FAIL.
+          구체적으로 거래소 주문 API(BingX order endpoint 등)를 Python에서 직접
+          호출하거나, Java Risk Gateway를 거치지 않고 live order를 전송하는 코드가
+          추가되면 FAIL. Python이 backtest/paper/research/manifest 생성만 하면 PASS.
+      - name: "Docs source-of-truth discipline"
+        mode: "warning"
+        instructions: >-
+          문서 변경 시 다음이면 WARNING: docs/12_ALL_IN_ONE_SPEC.md(snapshot/
+          reference) 에 새 제품·아키텍처 결정을 추가, docs/00_INDEX.md 에 등록되지
+          않은 상태로 문서 역할이 바뀜, source-of-truth 문서와 모순되는 내용 추가,
+          또는 docs 내 '결정 필요(decision required)' 항목을 근거 없이 확정.
+          위에 해당하지 않으면 PASS.
