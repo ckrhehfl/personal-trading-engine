@@ -89,6 +89,16 @@ Default workflow:
 6. Run verification commands.
 7. Summarize risks and next steps.
 
+## Branch and Merge Rules
+
+- Never commit or push directly to `main`.
+- All changes go through a branch and a Pull Request.
+- Self-review and run verification before opening a PR.
+- High-risk changes require a second reviewer.
+- Merge only after required checks pass.
+
+See `docs/claude/CODERABBIT_REVIEW_MODEL.md` for the full merge-gate model.
+
 ## MVP Priority
 
 Do not start with live BingX trading.
