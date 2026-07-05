@@ -274,29 +274,34 @@ class OrderingAndSecretLeakageTests(unittest.TestCase):
         )
 
     def test_run_all_gates_output_is_sorted(self):
-        # run_all_gates() itself must return a stable, sorted order even
-        # when multiple gates produce findings.
-        with tempfile.TemporaryDirectory():
-            pass  # no git repo needed; test via a synthetic Finding list
-        findings = [
-            sg.Finding("LIVE_TRADING_ENABLEMENT", "b.py", 5, "x"),
-            sg.Finding("FORBIDDEN_TRACKED_PATH", "a.env", 1, "x"),
-            sg.Finding("FORBIDDEN_TRACKED_PATH", "a.env", 0, "x"),
-        ]
-        findings.sort(key=lambda f: (f.gate, f.path, f.line))
-        self.assertEqual(
-            [(f.gate, f.path, f.line) for f in findings],
-            [
-                ("FORBIDDEN_TRACKED_PATH", "a.env", 0),
-                ("FORBIDDEN_TRACKED_PATH", "a.env", 1),
-                ("LIVE_TRADING_ENABLEMENT", "b.py", 5),
-            ],
-        )
+        # This must exercise the real orchestration function -- a synthetic,
+        # already-sorted Finding list would pass even if run_all_gates()
+        # itself broke its sorting contract.
+        repo = GitRepoFixture()
+        self.addCleanup(repo.cleanup)
+        repo.write("README.md", "hello\n")
+        base = repo.commit("base")
+        repo.write("id_rsa", "not a real key\n")
+        repo.write("configs/runtime.env", "LIVE_TRADING_ENABLED=true\n")
+        head = repo.commit("head")
+
+        findings = sg.run_all_gates(base, head, cwd=repo.path)
+        keys = [(f.gate, f.path, f.line) for f in findings]
+        self.assertTrue(keys, "expected at least one finding to test ordering")
+        self.assertEqual(keys, sorted(keys))
 
     def test_findings_do_not_embed_raw_matched_line_text(self):
+        # The matched line itself must contain the secret-like text, otherwise
+        # this test would pass even if a future change started echoing the
+        # raw matched line into the finding message.
         secret_looking_line = "BINGX_API_SECRET=sk_live_totally_fake_example_value"
-        added = {"configs/runtime.env": [(1, "LIVE_TRADING_ENABLED=true")]}
+        added = {
+            "configs/runtime.env": [
+                (1, f"LIVE_TRADING_ENABLED=true  # {secret_looking_line}")
+            ]
+        }
         findings = sg.check_live_trading_enablement(added)
+        self.assertEqual(len(findings), 1)
         for finding in findings:
             self.assertNotIn(secret_looking_line, finding.message)
             self.assertNotIn(secret_looking_line, finding.format())
@@ -373,27 +378,41 @@ class MainCliTests(unittest.TestCase):
         self.repo.write("README.md", "hello again\n")
         head = self.repo.commit("head")
 
-        # main() resolves the repo root relative to this script's own path,
-        # so exercise run_all_gates() directly with the fixture's cwd here;
-        # main()'s argument parsing / exit-code contract is covered below.
-        findings = sg.run_all_gates(base, head, cwd=self.repo.path)
-        self.assertEqual(findings, [])
+        exit_code = sg.main(["--base", base, "--head", head], cwd=self.repo.path)
+        self.assertEqual(exit_code, 0)
 
-    def test_main_exit_code_and_output_on_findings(self):
-        added = {"configs/runtime.env": [(1, "LIVE_TRADING_ENABLED=true")]}
-        findings = sg.check_live_trading_enablement(added)
-        self.assertEqual(len(findings), 1)
-        # Exit-code contract per module docstring: findings -> non-zero.
-        self.assertNotEqual(0, 1 if findings else 0)
-
-    def test_internal_error_on_invalid_ref(self):
+    def test_main_returns_one_on_findings(self):
         self.repo.write("README.md", "hello\n")
-        self.repo.commit("base")
+        base = self.repo.commit("base")
+        self.repo.write("id_rsa", "not a real key\n")
+        head = self.repo.commit("head")
+
+        exit_code = sg.main(["--base", base, "--head", head], cwd=self.repo.path)
+        self.assertEqual(exit_code, 1)
+
+    def test_internal_error_on_nonexistent_but_well_formed_ref(self):
+        self.repo.write("README.md", "hello\n")
+        head = self.repo.commit("base")
+        fake_sha = "0" * 40
+        with self.assertRaises(sg.SecurityGateError):
+            sg.run_all_gates(fake_sha, head, cwd=self.repo.path)
+
+    def test_rejects_ref_that_is_not_sha_shaped(self):
         with self.assertRaises(sg.SecurityGateError):
             sg.run_all_gates("not-a-real-ref", "HEAD", cwd=self.repo.path)
 
+    def test_rejects_dash_prefixed_ref(self):
+        # A leading "-" could otherwise be parsed as a git option
+        # (argument injection) rather than a revision.
+        with self.assertRaises(sg.SecurityGateError):
+            sg.run_all_gates("--upload-pack=evil", "HEAD", cwd=self.repo.path)
+
     def test_main_returns_two_on_internal_error(self):
-        exit_code = sg.main(["--base", "not-a-real-ref", "--head", "HEAD"])
+        self.repo.write("README.md", "hello\n")
+        head = self.repo.commit("base")
+        exit_code = sg.main(
+            ["--base", "0" * 40, "--head", head], cwd=self.repo.path
+        )
         self.assertEqual(exit_code, 2)
 
 

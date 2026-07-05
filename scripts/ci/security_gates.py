@@ -60,6 +60,21 @@ class Finding:
 # --------------------------------------------------------------------------
 
 
+_REF_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
+
+
+def validate_ref(value: str, label: str) -> str:
+    """Reject anything that isn't a plausible commit SHA.
+
+    base/head come from the GitHub Actions event payload and are passed
+    straight into `git diff`/`git ls-tree` arguments. A value starting with
+    `-` could otherwise be misread as a git option (argument injection).
+    """
+    if not _REF_RE.match(value):
+        raise SecurityGateError(f"{label} does not look like a git commit SHA: {value!r}")
+    return value
+
+
 def run_git(args: list[str], cwd: str | None = None) -> str:
     try:
         result = subprocess.run(
@@ -87,7 +102,12 @@ def read_file_at_ref(ref: str, path: str, cwd: str | None = None) -> str:
 
 
 def changed_paths(base: str, head: str, cwd: str | None = None) -> list[str]:
-    output = run_git(["diff", "--name-only", f"{base}...{head}"], cwd=cwd)
+    # --no-renames: a rename+edit must surface the original path as deleted
+    # and the new path as added, so a rename can never silently bypass a
+    # path-based gate (e.g. Gate D's docs/05_RISK_POLICY.md freeze).
+    output = run_git(
+        ["diff", "--no-renames", "--name-only", f"{base}...{head}"], cwd=cwd
+    )
     return [line for line in output.splitlines() if line]
 
 
@@ -98,8 +118,12 @@ def diff_added_lines(
     base: str, head: str, cwd: str | None = None
 ) -> dict[str, list[tuple[int, str]]]:
     """Return {path: [(new_line_no, line_text), ...]} for lines added between base and head."""
+    # --no-renames: see changed_paths() -- a rename must show as a full
+    # delete+add so the new path's entire content is scanned as "added",
+    # rather than hiding it behind a rename with only a small edit hunk.
     diff_text = run_git(
-        ["diff", "--unified=0", "--no-color", f"{base}...{head}"], cwd=cwd
+        ["diff", "--no-renames", "--unified=0", "--no-color", f"{base}...{head}"],
+        cwd=cwd,
     )
     added: dict[str, list[tuple[int, str]]] = {}
     current_file: str | None = None
@@ -144,7 +168,7 @@ def _is_docs_or_gate_infra(path: str) -> bool:
 
 _FORBIDDEN_BASENAMES = frozenset({"id_rsa", "id_ed25519"})
 _FORBIDDEN_EXTENSIONS = (".pem", ".key", ".p12", ".pfx", ".kdbx")
-_FORBIDDEN_DIR_PREFIXES = ("secrets/", "credentials/", "private/")
+_FORBIDDEN_DIR_NAMES = frozenset({"secrets", "credentials", "private"})
 # Mirrors the "API/account/trade exports" section of .gitignore.
 _EXPORT_GLOB_PATTERNS = (
     "*api-key*",
@@ -164,7 +188,9 @@ def check_forbidden_tracked_paths(tracked_files: list[str]) -> list[Finding]:
             reason = "tracked .env file"
         elif basename.startswith(".env.") and basename != ".env.example":
             reason = "tracked .env.* file (only .env.example is allowed)"
-        elif path.startswith(_FORBIDDEN_DIR_PREFIXES):
+        elif any(
+            segment in _FORBIDDEN_DIR_NAMES for segment in path.split("/")[:-1]
+        ):
             reason = "tracked path under a forbidden secrets/credentials directory"
         elif basename in _FORBIDDEN_BASENAMES:
             reason = "tracked SSH private key"
@@ -397,6 +423,8 @@ def get_workflow_files(head: str, cwd: str | None = None) -> dict[str, str]:
 
 
 def run_all_gates(base: str, head: str, cwd: str | None = None) -> list[Finding]:
+    validate_ref(base, "base")
+    validate_ref(head, "head")
     tracked = list_tracked_files(head, cwd=cwd)
     added = diff_added_lines(base, head, cwd=cwd)
     changed = changed_paths(base, head, cwd=cwd)
@@ -413,16 +441,23 @@ def run_all_gates(base: str, head: str, cwd: str | None = None) -> list[Finding]
     return findings
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, cwd: str | None = None) -> int:
+    """CLI entry point.
+
+    `cwd` overrides the repo root the gates run against; it exists so tests
+    can point this at a throwaway fixture repo. Production use (the
+    `__main__` block below) never passes it, so behavior is unchanged: the
+    repo root is derived from this script's own on-disk location.
+    """
     parser = argparse.ArgumentParser(description="Deterministic security gates")
-    parser.add_argument("--base", required=True, help="base git ref/SHA")
-    parser.add_argument("--head", required=True, help="head git ref/SHA")
+    parser.add_argument("--base", required=True, help="base git commit SHA")
+    parser.add_argument("--head", required=True, help="head git commit SHA")
     args = parser.parse_args(argv)
 
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = cwd if cwd is not None else str(Path(__file__).resolve().parents[2])
 
     try:
-        findings = run_all_gates(args.base, args.head, cwd=str(repo_root))
+        findings = run_all_gates(args.base, args.head, cwd=repo_root)
     except SecurityGateError as exc:
         print(f"INTERNAL_ERROR: {exc}", file=sys.stderr)
         return 2
