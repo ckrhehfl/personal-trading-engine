@@ -53,7 +53,7 @@
 | Decision log | `docs/11_DECISION_LOG.md` | — | 확정된 결정의 기준 기록 |
 | Setup (WSL/local) | `docs/LOCAL_SETUP_WSL.md` | `../README_BOOTSTRAP.md` | |
 | Secret / Git policy | `docs/SECRET_AND_GIT_POLICY.md` | `../CLAUDE.md`, `../.gitignore` | |
-| Review governance / merge gate | `docs/claude/CODERABBIT_REVIEW_MODEL.md` | `.coderabbit.yaml` | 본 PR 에서 신규 추가 |
+| Review governance / merge gate | `docs/claude/CODERABBIT_REVIEW_MODEL.md` | `.coderabbit.yaml`, `.github/workflows/security-gates.yml`, `scripts/ci/security_gates.py` | PR #2 에서 deterministic security gate(`security-gates` required check) 추가. 8절 참고 |
 
 ---
 

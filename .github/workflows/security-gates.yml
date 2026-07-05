@@ -1,0 +1,36 @@
+name: Security Gates
+
+# Deterministic, mechanical merge-gate checks. This is independent of the
+# CodeRabbit AI review layer (.coderabbit.yaml) and does not replace it.
+# See docs/claude/CODERABBIT_REVIEW_MODEL.md for how the two layers combine.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-gates-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-gates:
+    name: security-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run deterministic security gates
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3 scripts/ci/security_gates.py --base "$BASE_SHA" --head "$HEAD_SHA"
