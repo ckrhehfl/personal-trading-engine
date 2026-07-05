@@ -96,6 +96,7 @@ Default workflow:
 - Self-review and run verification before opening a PR.
 - High-risk changes require a second reviewer.
 - Merge only after required checks pass.
+- Never bypass, weaken, or skip a failing `security-gates` check to force it green.
 
 See `docs/claude/CODERABBIT_REVIEW_MODEL.md` for the full merge-gate model.
 

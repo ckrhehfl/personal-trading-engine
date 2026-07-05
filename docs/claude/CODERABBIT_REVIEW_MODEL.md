@@ -29,7 +29,7 @@
 아래가 **전부 충족**될 때만 merge한다. 하나라도 아니면 merge 금지.
 
 - [ ] 변경은 PR을 통해서만 들어온다. `main` 직접 push 금지.
-- [ ] 모든 required check가 green.
+- [ ] 모든 required check가 green (`CodeRabbit` + `security-gates`).
 - [ ] CodeRabbit 리뷰가 **완료**됨(pending 아님).
 - [ ] 실패한 pre-merge custom check가 **0건**.
 - [ ] 해결되지 않은(unresolved) 리뷰 conversation이 **0건**.
@@ -113,3 +113,50 @@
 - risk / leverage 자동 승인
 
 이것들은 별도의 정책 문서와 명시적 승인 절차가 생긴 뒤에만 검토한다.
+
+---
+
+## 8. Deterministic Security Gates (`security-gates`)
+
+CodeRabbit(1절)과 별개로, `.github/workflows/security-gates.yml` +
+`scripts/ci/security_gates.py` 가 **AI 판단 없이 기계적으로** 실패 조건을 막는다.
+
+| | CodeRabbit | security-gates |
+|---|---|---|
+| 성격 | AI 리뷰어. 맥락을 읽고 판단 | 결정론적 스크립트. 패턴 매치만 수행 |
+| 놓칠 수 있음 | 예 (2·6절) | 예 — 아래 커버 범위 밖은 못 잡음 |
+| 대체 관계 | CodeRabbit이 security-gates를 대체하지 않음 | security-gates가 CodeRabbit을 대체하지 않음 |
+
+**둘 다 required check로 green이어야 merge 후보다.** 하나만 통과해서는 안 된다.
+
+### 8.1 현재 구현된 gate
+
+| Gate | 대상 | 확인 |
+|---|---|---|
+| `FORBIDDEN_TRACKED_PATH` | HEAD의 `git ls-files` | `.env`(`.env.example` 제외), `secrets/`·`credentials/`·`private/`, `*.pem/*.key/*.p12/*.pfx/*.kdbx`, `id_rsa`/`id_ed25519`, `.gitignore`의 export 패턴과 일치하는 tracked path |
+| `LIVE_TRADING_ENABLEMENT` | PR로 추가된 라인(docs/`*.md`/`.coderabbit.yaml` 제외) | `LIVE_TRADING_ENABLED`/`live_trading` 이 true 로 설정 |
+| `PYTHON_DIRECT_LIVE_ORDER_PATH` | `python/**` 에 추가된 라인 | BingX swap 실주문/batch order endpoint 문자열의 직접 참조 |
+| `RISK_POLICY_CHANGE_BLOCKED` | 변경된 파일 목록 | `docs/05_RISK_POLICY.md` 자체의 변경을 임시로 전면 차단(아래 8.2) |
+| `DANGEROUS_PIPE_INSTALL` | 추가된 라인(docs 제외) | `curl`/`wget` 출력을 `sh`/`bash` 로 직접 파이프 |
+| `UNSAFE_WORKFLOW_TRIGGER` / `WORKFLOW_WRITE_PERMISSION` / `WORKFLOW_SECRET_REFERENCE` / `UNPINNED_ACTION` | HEAD의 `.github/workflows/*.yml(.yaml)` 전체 | `pull_request_target`/`workflow_run`, write 권한, `${{ secrets. }}` 참조, full 40자 SHA로 pin 되지 않은 external action |
+
+### 8.2 알려진 한계 (임시 조치, 확대 필요)
+
+- **Risk policy freeze는 임시다.** 아직 machine-readable risk config/schema가 없어서
+  숫자형 semantic comparison(leverage/loss limit 실제 값 비교)을 구현할 수 없다.
+  현재는 `docs/05_RISK_POLICY.md` 변경 자체를 막는 방식으로 대신한다. 이 문서를
+  실제로 갱신해야 하면 별도 정책 PR + 명시적 human approval 절차를 먼저 만든다.
+- **Python direct live-order 탐지는 알려진 BingX swap order endpoint 문자열만
+  잡는다.** 모든 미래 SDK 호출 경로를 막는다고 보장하지 않으며, BingX adapter가
+  실제로 구현되는 단계에서 gate를 확장해야 한다.
+- GitHub의 built-in secret scanning / push protection은 이 gate와 **별도 계층**이며,
+  이 gate가 그 기능을 대체하지 않는다.
+- 이 gate는 GitHub Actions `pull_request` 트리거의 base/head SHA만 정확히 diff한다.
+  `workflow_dispatch` 수동 실행 시에는 diff 대상이 없어 정적 gate(`FORBIDDEN_TRACKED_PATH`,
+  workflow hardening)만 사실상 유효하다.
+
+### 8.3 여전히 금지
+
+- `security-gates` 를 우회하거나 약화하는 변경.
+- 실패하는 gate를 삭제/skip 처리해서 통과시키는 것.
+- auto-merge — 8절 이전의 원칙(7절)과 동일하게 이 gate 추가 이후에도 여전히 금지.

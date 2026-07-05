@@ -7,6 +7,9 @@
 *.crt
 *.p12
 *.pfx
+*.kdbx
+id_rsa
+id_ed25519
 secrets/
 credentials/
 private/
