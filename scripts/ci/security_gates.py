@@ -128,23 +128,32 @@ def diff_added_lines(
     added: dict[str, list[tuple[int, str]]] = {}
     current_file: str | None = None
     next_line_no: int | None = None
+    # File headers ("+++ b/path", "--- a/path") only appear before the first
+    # "@@" hunk marker of a file's diff. Added *content* inside a hunk can
+    # itself start with "+++ " or "--- " (e.g. a line whose content is
+    # literally "++ /dev/null" renders as "+++ /dev/null"), which must not be
+    # mistaken for a header -- that would reset current_file and silently
+    # drop every subsequent added line for the rest of the hunk.
+    in_hunk = False
     for line in diff_text.splitlines():
         if line.startswith("diff --git "):
             current_file = None
             next_line_no = None
-        elif line.startswith("+++ "):
+            in_hunk = False
+        elif not in_hunk and line.startswith("+++ "):
             target = line[4:]
             current_file = None if target == "/dev/null" else target[2:]
-        elif line.startswith("--- "):
+        elif not in_hunk and line.startswith("--- "):
             continue
         elif line.startswith("@@"):
             match = _HUNK_RE.match(line)
             next_line_no = int(match.group(1)) if match else None
-        elif line.startswith("+"):
+            in_hunk = True
+        elif in_hunk and line.startswith("+"):
             if current_file is not None and next_line_no is not None:
                 added.setdefault(current_file, []).append((next_line_no, line[1:]))
                 next_line_no += 1
-        elif line.startswith("-"):
+        elif in_hunk and line.startswith("-"):
             continue
     return added
 

@@ -367,6 +367,120 @@ class GitPlumbingIntegrationTests(unittest.TestCase):
         self.assertIn("UNPINNED_ACTION", gates_found)
 
 
+class DiffParserHeaderCollisionTests(unittest.TestCase):
+    """Regression coverage for a CodeRabbit-reported Critical finding: added
+    content whose text starts with "++ " or "-- " renders as "+++ "/"--- " in
+    unified diff output and must not be mistaken for a file header. Before
+    the fix, such a line reset current_file (often to None for
+    "+++ /dev/null"), silently dropping every subsequent added line in that
+    hunk from Gate B/C/E scanning -- a real bypass, not just a cosmetic bug.
+    """
+
+    def setUp(self):
+        self.repo = GitRepoFixture()
+        self.addCleanup(self.repo.cleanup)
+
+    def test_parser_does_not_treat_dev_null_lookalike_as_header(self):
+        # A) direct parser regression: the content line and the one after it
+        # must both be attributed to the real file, not dropped or
+        # reattributed because "++ /dev/null" renders as "+++ /dev/null".
+        self.repo.write("configs/runtime.env", "APP_ENV=local\n")
+        base = self.repo.commit("base")
+
+        self.repo.write(
+            "configs/runtime.env",
+            "APP_ENV=local\n++ /dev/null\nLIVE_TRADING_ENABLED=true\n",
+        )
+        head = self.repo.commit("head")
+
+        added = sg.diff_added_lines(base, head, cwd=self.repo.path)
+        lines = added.get("configs/runtime.env", [])
+        texts = [text for _, text in lines]
+        self.assertIn("++ /dev/null", texts)
+        self.assertIn("LIVE_TRADING_ENABLED=true", texts)
+        # Both lines must be attributed to the actual file, not lost to a
+        # None/incorrect current_file.
+        self.assertEqual(len(lines), 2)
+
+    def test_gate_b_still_fires_despite_dev_null_lookalike(self):
+        # B) actual gate bypass regression: run the real orchestration and
+        # confirm the live-trading flag is still caught.
+        self.repo.write("configs/runtime.env", "APP_ENV=local\n")
+        base = self.repo.commit("base")
+
+        self.repo.write(
+            "configs/runtime.env",
+            "APP_ENV=local\n++ /dev/null\nLIVE_TRADING_ENABLED=true\n",
+        )
+        head = self.repo.commit("head")
+
+        findings = sg.run_all_gates(base, head, cwd=self.repo.path)
+        self.assertTrue(
+            any(f.gate == "LIVE_TRADING_ENABLEMENT" for f in findings),
+            f"expected LIVE_TRADING_ENABLEMENT to fire, got: {findings!r}",
+        )
+
+    def test_parser_does_not_treat_dashdash_lookalike_as_header(self):
+        # C) second header-like content variant: a content line of
+        # "-- something" renders as "--- something" in the diff, colliding
+        # with the old-file header prefix.
+        self.repo.write("configs/runtime.env", "APP_ENV=local\n")
+        base = self.repo.commit("base")
+
+        self.repo.write(
+            "configs/runtime.env",
+            "APP_ENV=local\n-- something\nLIVE_TRADING_ENABLED=true\n",
+        )
+        head = self.repo.commit("head")
+
+        added = sg.diff_added_lines(base, head, cwd=self.repo.path)
+        lines = added.get("configs/runtime.env", [])
+        texts = [text for _, text in lines]
+        self.assertIn("-- something", texts)
+        self.assertIn("LIVE_TRADING_ENABLED=true", texts)
+
+        findings = sg.run_all_gates(base, head, cwd=self.repo.path)
+        self.assertTrue(any(f.gate == "LIVE_TRADING_ENABLEMENT" for f in findings))
+
+    def test_real_file_headers_still_recognized(self):
+        # Guard against over-correcting: an actual new file (real "+++ b/..."
+        # header before any hunk) must still be attributed correctly, and a
+        # deleted file's old header ("--- a/...") must not itself be
+        # misparsed as added content.
+        self.repo.write("keep.txt", "keep\n")
+        base = self.repo.commit("base")
+
+        self.repo.write("keep.txt", "keep\n")
+        self.repo.write("new_file.txt", "brand new content\n")
+        head = self.repo.commit("head")
+
+        added = sg.diff_added_lines(base, head, cwd=self.repo.path)
+        self.assertIn("new_file.txt", added)
+        texts = [text for _, text in added["new_file.txt"]]
+        self.assertIn("brand new content", texts)
+
+    def test_multiple_hunks_and_files_unaffected(self):
+        # Broader regression guard: the in_hunk state must reset correctly
+        # across "diff --git" boundaries and across multiple hunks within a
+        # single file.
+        self.repo.write("a.txt", "\n".join(f"a{i}" for i in range(1, 11)) + "\n")
+        self.repo.write("b.txt", "b1\nb2\n")
+        base = self.repo.commit("base")
+
+        self.repo.write(
+            "a.txt",
+            "a1-changed\n" + "\n".join(f"a{i}" for i in range(2, 10)) + "\na10-changed\n",
+        )
+        self.repo.write("b.txt", "b1\nb2\nb3-added\n")
+        head = self.repo.commit("head")
+
+        added = sg.diff_added_lines(base, head, cwd=self.repo.path)
+        a_texts = [text for _, text in added.get("a.txt", [])]
+        b_texts = [text for _, text in added.get("b.txt", [])]
+        self.assertEqual(a_texts, ["a1-changed", "a10-changed"])
+        self.assertEqual(b_texts, ["b3-added"])
+
+
 class MainCliTests(unittest.TestCase):
     def setUp(self):
         self.repo = GitRepoFixture()
