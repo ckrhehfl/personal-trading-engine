@@ -48,12 +48,12 @@
 | Validation / hard gate | `docs/06_VALIDATION_POLICY.md` | `docs/07_MLOPS_...` §6 | |
 | MLOps / train / deploy / rollback | `docs/07_MLOPS_AUTO_TRAIN_DEPLOY_ROLLBACK.md` | `docs/04_...`, `docs/01_...` §7 | MVP 미구현, 구조만 |
 | LLM usage policy | `docs/08_LLM_USAGE_POLICY.md` | `../CLAUDE.md` (LLM Usage Policy 절) | |
-| Claude / dev workflow | `docs/09_CLAUDE_WORKFLOW.md` | `../CLAUDE.md` (Development Workflow 절) | 본 PR 의 merge gate 는 `docs/claude/CODERABBIT_REVIEW_MODEL.md` |
+| Claude / dev workflow | `docs/09_CLAUDE_WORKFLOW.md` | `../CLAUDE.md` (Development Workflow 절), `docs/claude/CLAUDE_OPERATING_MODEL.md`, `docs/claude/PM_HANDOFF.md` | PR #3 에서 v4로 갱신. 상세 실행 절차는 `CLAUDE_OPERATING_MODEL.md`(supporting reference), 현재 상태 스냅샷은 `PM_HANDOFF.md`(supporting reference / current snapshot, source of truth 아님) |
 | Open questions / risks | `docs/10_OPEN_QUESTIONS_AND_RISKS.md` | `docs/00_MASTER_SUMMARY.md` §10 | |
 | Decision log | `docs/11_DECISION_LOG.md` | — | 확정된 결정의 기준 기록 |
 | Setup (WSL/local) | `docs/LOCAL_SETUP_WSL.md` | `../README_BOOTSTRAP.md` | |
 | Secret / Git policy | `docs/SECRET_AND_GIT_POLICY.md` | `../CLAUDE.md`, `../.gitignore` | |
-| Review governance / merge gate | `docs/claude/CODERABBIT_REVIEW_MODEL.md` | `.coderabbit.yaml`, `.github/workflows/security-gates.yml`, `scripts/ci/security_gates.py` | PR #2 에서 deterministic security gate(`security-gates` required check) 추가. 8절 참고 |
+| Review governance / merge gate | `docs/claude/CODERABBIT_REVIEW_MODEL.md` | `.coderabbit.yaml`, `.github/workflows/security-gates.yml`, `scripts/ci/security_gates.py` | PR #2 에서 deterministic security gate(`security-gates` required check) 추가(8절). PR #3 에서 Latest-Head Review Completeness 추가(9절) |
 
 ---
 
@@ -129,6 +129,8 @@ docs/
   SECRET_AND_GIT_POLICY.md
   claude/
     CODERABBIT_REVIEW_MODEL.md    # merge gate 모델
+    CLAUDE_OPERATING_MODEL.md     # 상세 operating procedure (supporting reference)
+    PM_HANDOFF.md                 # 현재 상태 스냅샷 (supporting reference / snapshot)
   archive/                        # (후속 PR) 12_ALL_IN_ONE_SPEC.md 등 이동 대상
 ```
 

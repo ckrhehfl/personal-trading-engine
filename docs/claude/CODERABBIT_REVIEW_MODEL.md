@@ -33,6 +33,7 @@
 - [ ] CodeRabbit 리뷰가 **완료**됨(pending 아님).
 - [ ] 실패한 pre-merge custom check가 **0건**.
 - [ ] 해결되지 않은(unresolved) 리뷰 conversation이 **0건**.
+- [ ] **현재 head SHA 기준**으로 9절 Latest-Head Review Completeness 조건을 모두 확인.
 - [ ] PR description이 존재하고 아래를 명시:
   - 변경 파일
   - 추가/변경한 테스트
@@ -160,3 +161,35 @@ CodeRabbit(1절)과 별개로, `.github/workflows/security-gates.yml` +
 - `security-gates` 를 우회하거나 약화하는 변경.
 - 실패하는 gate를 삭제/skip 처리해서 통과시키는 것.
 - auto-merge — 8절 이전의 원칙(7절)과 동일하게 이 gate 추가 이후에도 여전히 금지.
+
+---
+
+## 9. Latest-Head Review Completeness
+
+**교훈(PR #2):** required check green(`CodeRabbit` + `security-gates`)과
+CodeRabbit formal `APPROVED`만으로는 merge readiness 판정에 **불충분했다.**
+fix commit을 push한 뒤, 같은 head SHA에 대해 formal `APPROVED` review와는
+**별도로** `COMMENTED` review가 존재했고, 그 안에 outside-diff Critical
+finding이 남아 있었다. GitHub PR UI/`reviewDecision` 필드만 보면 이 finding을
+놓칠 수 있다.
+
+이 문제를 재발시키지 않기 위해, **`READY_TO_MERGE` 판정은 항상 "현재 head
+SHA"에 대한 판정**이며, 다음을 **모두** 확인해야 한다.
+
+- [ ] 판정 대상 head SHA를 명시적으로 확인했다.
+- [ ] 새 commit이 push되면 **이전의 모든 readiness 판정은 즉시 무효**다.
+      head SHA를 기준으로 처음부터 다시 확인한다.
+- [ ] required checks(`CodeRabbit`, `security-gates`)가 green이다.
+- [ ] CodeRabbit **formal `APPROVED`**다(`reviewDecision`).
+- [ ] **review submissions 전체**를 봤다 — `APPROVED` 하나만 보고 끝내지
+      않는다. 같은 head 또는 이전 head에 남은 `COMMENTED`/`CHANGES_REQUESTED`
+      review가 있는지 확인한다.
+- [ ] `COMMENTED` review의 본문과 **outside-diff 코멘트**(diff 라인에 걸리지
+      않아 inline으로 안 붙는 코멘트)를 확인했다.
+- [ ] top-level(issue-level) 코멘트에 새 blocker가 없다.
+- [ ] unresolved inline review conversation이 **0건**이다.
+- [ ] latest head 기준으로 actionable Critical/Major finding이 **0건**이다.
+- [ ] PR이 `mergeable` 상태다.
+
+위 전부가 "예"일 때만 `READY_TO_MERGE`로 보고한다. 하나라도 확인하지 못했거나
+"아니오"이면 `REVIEW_PENDING` 또는 `BLOCKED`로 보고한다.
