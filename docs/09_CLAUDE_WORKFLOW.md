@@ -56,9 +56,10 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 | Class | 대상 예시 | Claude autonomy |
 |---|---|---|
 | **R0** — docs/reference only | 문서 index, non-policy docs, 오타/링크 수정 | plan → edit → validate → commit → push → PR 까지 자율 수행 가능 |
-| **R1** — repo/tooling/governance | CI, security gates, Claude 설정, (향후) hooks/permissions | 작은 scope 내 구현 가능. 더 강한 리뷰 필요. security tooling 변경은 second review 후보(§9 참고) |
+| **R1** — repo/tooling/governance | CI, security gates, Claude 설정, (향후) hooks/permissions | 작은 scope 내 구현 가능. 더 강한 리뷰 필요. security tooling 변경은 second review 후보(`docs/claude/CLAUDE_OPERATING_MODEL.md` §9 참고) |
 | **R2** — schema/architecture contract | 공유 schema, cross-language interface, ADR | plan 먼저, 호환성 검증 필수, breaking change는 별도 승인 |
-| **R3** — runtime trading code | Java OMS, Risk Gateway, Execution, Python backtest engine | plan 먼저, 도메인별 테스트 필수, second AI reviewer 필요 |
+| **R3** — runtime trading code | Java OMS, Risk Gateway, Execution | plan 먼저, 도메인별 테스트 필수, second AI reviewer 필요 |
+| **Python backtest** (`python/**`) | 백테스트/research 코드 | plan 먼저, Python tests + `docs/06_VALIDATION_POLICY.md` §4 편향 체크리스트 확인. second AI reviewer는 요구하지 않음(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §3과 일치) |
 | **R4** — live/risk/credential/deployment | live flag, 실제 거래소 write, leverage, risk limit, key, production 배포 | **기본 BLOCKED / plan-only.** 명시적 human decision 없이 구현 금지. 현재 단계에서는 live enablement 자체가 금지 |
 
 분류가 모호하면 **더 높은 risk class**를 적용한다.
