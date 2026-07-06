@@ -296,10 +296,22 @@ def _resolve_command_head(tokens: list[str]) -> tuple[str, list[str]]:
     resolve the actual command to its basename (so /bin/cat and cat are
     treated the same)."""
     idx = 0
+    saw_wrapper = False
     while idx < len(tokens) and (
         tokens[idx] in _COMMAND_WRAPPERS or _ENV_ASSIGNMENT_RE.match(tokens[idx])
     ):
+        saw_wrapper = True
         idx += 1
+    if saw_wrapper:
+        # sudo/env can take their own flags (and flag values) before the
+        # real command, e.g. "sudo -u root cat .env", "env -i cat .env".
+        # Once a wrapper is seen, keep scanning for a recognized read-style
+        # command instead of assuming the very next token is it.
+        while (
+            idx < len(tokens)
+            and tokens[idx].rsplit("/", 1)[-1] not in _READ_STYLE_COMMANDS
+        ):
+            idx += 1
     if idx >= len(tokens):
         return "", []
     head = tokens[idx].rsplit("/", 1)[-1]
@@ -312,6 +324,14 @@ def _check_read_style_secret_access(tokens: list[str]) -> Finding | None:
         return None
     for arg in args:
         if arg.startswith("-"):
+            # A flag can carry its value inline (e.g. --include=.env);
+            # check the part after "=" too rather than skipping it outright.
+            _, _, value = arg.partition("=")
+            if value and check_forbidden_secret_path(value):
+                return Finding(
+                    "FORBIDDEN_SECRET_PATH_READ",
+                    "command reads a forbidden secret/credential path",
+                )
             continue
         if check_forbidden_secret_path(arg):
             return Finding(

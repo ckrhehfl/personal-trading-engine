@@ -576,6 +576,24 @@ class ReadDispatchCases(unittest.TestCase):
     def test_bash_sudo_env_wrapped_ordinary_command_is_safe(self):
         self.assertIsNone(pg.evaluate_bash("sudo cat README.md"))
 
+    def test_bash_sudo_with_flag_then_secret_is_blocked(self):
+        finding = pg.evaluate_bash("sudo -u root cat .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_env_with_flag_then_secret_is_blocked(self):
+        finding = pg.evaluate_bash("env -i cat .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_no_wrapper_command_named_like_flag_is_safe(self):
+        # Guards against the extended wrapper-flag scan over-blocking when
+        # there is no wrapper at all: "echo cat .env" is not "sudo"/"env"
+        # prefixed, so it must not be treated as if it were.
+        self.assertIsNone(pg.evaluate_bash("echo cat .env"))
+
+    def test_bash_grep_include_equals_secret_path_is_blocked(self):
+        finding = pg.evaluate_bash("grep --include=.env -r password .")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
 
 # --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
