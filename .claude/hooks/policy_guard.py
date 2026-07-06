@@ -2,9 +2,9 @@
 """Deterministic PreToolUse policy guard for personal-trading-engine.
 
 Registered in .claude/settings.json as a PreToolUse hook for the
-Bash|Edit|Write|MultiEdit|NotebookEdit|Read matcher. This is a mechanical,
-non-AI safety layer that acts even when the parent Claude Code session runs
-with --dangerously-skip-permissions -- see
+Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Grep matcher. This is a
+mechanical, non-AI safety layer that acts even when the parent Claude Code
+session runs with --dangerously-skip-permissions -- see
 docs/claude/CLAUDE_OPERATING_MODEL.md §4 for why permission bypass is not
 itself a safety boundary.
 
@@ -280,6 +280,25 @@ def _check_docker_privileged(tokens: list[str]) -> Finding | None:
     return None
 
 
+_READ_STYLE_COMMANDS = frozenset(
+    {"cat", "less", "more", "head", "tail", "base64", "xxd", "od", "strings", "hexdump"}
+)
+
+
+def _check_read_style_secret_access(tokens: list[str]) -> Finding | None:
+    if not tokens or tokens[0] not in _READ_STYLE_COMMANDS:
+        return None
+    for arg in tokens[1:]:
+        if arg.startswith("-"):
+            continue
+        if check_forbidden_secret_path(arg):
+            return Finding(
+                "FORBIDDEN_SECRET_PATH_READ",
+                "command reads a forbidden secret/credential path",
+            )
+    return None
+
+
 _SEGMENT_CHECKS = (
     _check_git_push,
     _check_gh_pr_merge,
@@ -287,6 +306,7 @@ _SEGMENT_CHECKS = (
     _check_gh_api_branch_protection,
     _check_rm,
     _check_docker_privileged,
+    _check_read_style_secret_access,
 )
 
 
@@ -405,6 +425,15 @@ def evaluate_event(payload: dict) -> Finding | None:
 
     if tool_name == "Read":
         return evaluate_file_read(tool_input)
+
+    if tool_name == "Grep":
+        path = tool_input.get("path", "")
+        if isinstance(path, str) and check_forbidden_secret_path(path):
+            return Finding(
+                "FORBIDDEN_SECRET_PATH_READ",
+                "search targets a forbidden secret/credential path",
+            )
+        return None
 
     return None
 

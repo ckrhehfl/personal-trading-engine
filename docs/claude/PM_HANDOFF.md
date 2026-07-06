@@ -117,7 +117,7 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 - (PR #5) implementation agent는 여전히 없다 — 새 skill 5개는 모두 read-only
   reviewer의 manual-only wrapper일 뿐이다
 - (PR #5, CodeRabbit finding 반영) PreToolUse hook matcher는
-  `Bash|Edit|Write|MultiEdit|NotebookEdit|Read`로 확장되었다 —
+  `Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Grep`로 확장되었다 —
   `MultiEdit`/`NotebookEdit`도 hook의 내용 검사(secret path, live trading
   flag) 대상이 되었고, `Read`도 secret path 열람 차단 대상이 되었다(CodeRabbit
   Critical finding: `.env.local`/`.env.production`/`id_rsa`/`id_ed25519`/
@@ -126,6 +126,13 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
   읽기도 함께 차단한다 — `permissions.allow` 예외 규칙 추가가 이 PR에서
   금지되어 있어 세밀한 예외를 둘 수 없었고, live/secret 탐지에서는 과차단이
   누락보다 안전하다는 원칙에 따라 의도적으로 보수적으로 설계했다
+- (PR #5, CodeRabbit finding 3차 반영) `evaluate_bash`가 `cat`/`less`/`more`/
+  `head`/`tail`/`base64`/`xxd`/`od`/`strings`/`hexdump` 같은 read-style 명령의
+  인자를 `check_forbidden_secret_path`로 검사하도록 추가되었고, `Grep` tool도
+  hook matcher와 dispatch에 포함되었다(`tool_input.path`만 검사, 검색
+  패턴/내용은 검사하지 않음). 다만 이 목록에 없는 다른 read 계열 도구(예: 언어
+  런타임을 통한 파일 열람, `dd`, 커스텀 스크립트)는 여전히 커버되지 않는다 —
+  완전한 목록이라고 주장하지 않는다
 - (PR #5) `context: fork` + `agent:` 조합이 감싸는 reviewer subagent의
   `tools: Read, Grep, Glob` 제약을 forked 실행 컨텍스트에 구조적으로
   강제하는지는 실제 라이브 세션에서 별도로 검증되지 않았다 — 문서상 동작

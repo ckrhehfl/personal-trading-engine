@@ -504,6 +504,55 @@ class ReadDispatchCases(unittest.TestCase):
             payload["hookSpecificOutput"]["permissionDecisionReason"],
         )
 
+    def test_bash_cat_env_is_blocked(self):
+        finding = pg.evaluate_bash("cat .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_cat_with_flag_then_secret_path_is_blocked(self):
+        finding = pg.evaluate_bash("cat -A infra/id_rsa")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_head_secret_is_blocked(self):
+        finding = pg.evaluate_bash("head -5 infra/secrets/token.txt")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_base64_secret_is_blocked(self):
+        finding = pg.evaluate_bash("base64 ~/.ssh/id_rsa")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_cat_ordinary_file_is_safe(self):
+        self.assertIsNone(pg.evaluate_bash("cat README.md"))
+
+    def test_bash_strings_secret_is_blocked(self):
+        finding = pg.evaluate_bash("strings vault/accounts.kdbx")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_grep_dispatch_secret_path_is_blocked(self):
+        finding = pg.evaluate_event(
+            {"tool_name": "Grep", "tool_input": {"pattern": "x", "path": ".env"}}
+        )
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_grep_dispatch_ordinary_path_is_safe(self):
+        finding = pg.evaluate_event(
+            {"tool_name": "Grep", "tool_input": {"pattern": "x", "path": "python/"}}
+        )
+        self.assertIsNone(finding)
+
+    def test_grep_dispatch_no_path_is_safe(self):
+        finding = pg.evaluate_event(
+            {"tool_name": "Grep", "tool_input": {"pattern": "x"}}
+        )
+        self.assertIsNone(finding)
+
+    def test_grep_end_to_end_via_cli_is_blocked(self):
+        result = _run_cli(
+            {"tool_name": "Grep", "tool_input": {"pattern": "x", "path": ".env"}}
+        )
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["hookSpecificOutput"]["permissionDecision"], "deny")
+
 
 # --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
