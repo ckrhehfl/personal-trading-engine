@@ -2,10 +2,11 @@
 """Deterministic PreToolUse policy guard for personal-trading-engine.
 
 Registered in .claude/settings.json as a PreToolUse hook for the
-Bash|Edit|Write|MultiEdit|NotebookEdit matcher. This is a mechanical, non-AI
-safety layer that acts even when the parent Claude Code session runs with
---dangerously-skip-permissions -- see docs/claude/CLAUDE_OPERATING_MODEL.md
-§4 for why permission bypass is not itself a safety boundary.
+Bash|Edit|Write|MultiEdit|NotebookEdit|Read matcher. This is a mechanical,
+non-AI safety layer that acts even when the parent Claude Code session runs
+with --dangerously-skip-permissions -- see
+docs/claude/CLAUDE_OPERATING_MODEL.md §4 for why permission bypass is not
+itself a safety boundary.
 
 This is a pattern matcher, not a full shell parser. It intentionally
 duplicates some coverage already provided by scripts/ci/security_gates.py
@@ -135,7 +136,11 @@ def _is_exempt_live_flag_path(path: str) -> bool:
         return False
     if normalized.endswith(".md"):
         return True
-    if "docs" in segments:
+    # Top-level docs/ only -- a "docs" segment appearing elsewhere (e.g.
+    # "configs/docs/canary.yaml") must not exempt live-trading-flag
+    # detection. Live-trading-flag detection bypass is never acceptable, so
+    # this errs toward narrower (fewer exemptions), not broader.
+    if segments and segments[0] == "docs":
         return True
     for suffix in _EXEMPT_LIVE_FLAG_SUFFIXES:
         if normalized == suffix or normalized.endswith("/" + suffix):
@@ -368,6 +373,16 @@ def evaluate_file_change(tool_name: str, tool_input: dict) -> Finding | None:
     return None
 
 
+def evaluate_file_read(tool_input: dict) -> Finding | None:
+    file_path = _extract_file_path("Read", tool_input)
+    if check_forbidden_secret_path(file_path):
+        return Finding(
+            "FORBIDDEN_SECRET_PATH_READ",
+            "read of a forbidden secret/credential path is blocked",
+        )
+    return None
+
+
 # --------------------------------------------------------------------------
 # event dispatcher
 # --------------------------------------------------------------------------
@@ -387,6 +402,9 @@ def evaluate_event(payload: dict) -> Finding | None:
 
     if tool_name in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
         return evaluate_file_change(tool_name, tool_input)
+
+    if tool_name == "Read":
+        return evaluate_file_read(tool_input)
 
     return None
 

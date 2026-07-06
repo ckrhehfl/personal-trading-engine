@@ -116,9 +116,16 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
   후속 PR에서 약화되는 것을 막는 기계적 장치는 아직 없다
 - (PR #5) implementation agent는 여전히 없다 — 새 skill 5개는 모두 read-only
   reviewer의 manual-only wrapper일 뿐이다
-- (PR #5, CodeRabbit finding 반영) PreToolUse hook matcher는 `Bash|Edit|Write|
-  MultiEdit|NotebookEdit`로 확장되었다 — `MultiEdit`/`NotebookEdit`도 이제
-  hook의 내용 검사(secret path, live trading flag) 대상이다
+- (PR #5, CodeRabbit finding 반영) PreToolUse hook matcher는
+  `Bash|Edit|Write|MultiEdit|NotebookEdit|Read`로 확장되었다 —
+  `MultiEdit`/`NotebookEdit`도 hook의 내용 검사(secret path, live trading
+  flag) 대상이 되었고, `Read`도 secret path 열람 차단 대상이 되었다(CodeRabbit
+  Critical finding: `.env.local`/`.env.production`/`id_rsa`/`id_ed25519`/
+  `*.kdbx` 등이 Read 경로에서 빠져 있던 문제)
+- (PR #5) `.claude/settings.json`의 `Read(.env.*)` deny 규칙은 `.env.example`
+  읽기도 함께 차단한다 — `permissions.allow` 예외 규칙 추가가 이 PR에서
+  금지되어 있어 세밀한 예외를 둘 수 없었고, live/secret 탐지에서는 과차단이
+  누락보다 안전하다는 원칙에 따라 의도적으로 보수적으로 설계했다
 - (PR #5) `context: fork` + `agent:` 조합이 감싸는 reviewer subagent의
   `tools: Read, Grep, Glob` 제약을 forked 실행 컨텍스트에 구조적으로
   강제하는지는 실제 라이브 세션에서 별도로 검증되지 않았다 — 문서상 동작

@@ -2,12 +2,26 @@
   "permissions": {
     "deny": [
       "Read(.env)",
+      "Read(.env.*)",
       "Read(**/secrets/**)",
       "Read(**/credentials/**)",
       "Read(**/private/**)",
       "Read(~/.ssh/**)",
       "Read(~/.aws/**)",
       "Read(~/.config/gcloud/**)",
+      "Read(**/id_rsa)",
+      "Read(**/id_rsa.*)",
+      "Read(**/id_ed25519)",
+      "Read(**/id_ed25519.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Read(**/*.kdbx)",
+      "Read(**/*.jks)",
+      "Read(**/*.keystore)",
+      "Read(**/*.ppk)",
+      "Read(**/*.p8)",
 
       "Edit(.env)",
       "Edit(**/secrets/**)",
@@ -73,7 +87,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Read",
         "hooks": [
           {
             "type": "command",

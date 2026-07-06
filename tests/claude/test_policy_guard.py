@@ -467,6 +467,45 @@ class MultiEditNotebookEditCases(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------
+# Read dispatch (CodeRabbit: secret files must not be readable either)
+# --------------------------------------------------------------------------
+
+
+class ReadDispatchCases(unittest.TestCase):
+    def test_read_env_is_blocked(self):
+        finding = pg.evaluate_file_read({"file_path": ".env"})
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_read_id_rsa_is_blocked(self):
+        finding = pg.evaluate_file_read({"file_path": "infra/id_rsa"})
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_read_kdbx_is_blocked(self):
+        finding = pg.evaluate_file_read({"file_path": "vault/accounts.kdbx"})
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_read_ordinary_file_is_safe(self):
+        finding = pg.evaluate_file_read({"file_path": "python/backtest/engine.py"})
+        self.assertIsNone(finding)
+
+    def test_read_dispatch_via_evaluate_event(self):
+        finding = pg.evaluate_event(
+            {"tool_name": "Read", "tool_input": {"file_path": ".env"}}
+        )
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_read_end_to_end_via_cli_is_blocked(self):
+        result = _run_cli({"tool_name": "Read", "tool_input": {"file_path": ".env"}})
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn(
+            "FORBIDDEN_SECRET_PATH_READ",
+            payload["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+
+# --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
 # additional extensions, prefix-matched key basenames)
 # --------------------------------------------------------------------------
@@ -563,7 +602,7 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_unknown_tool_name_is_safe(self):
-        result = _run_cli({"tool_name": "Read", "tool_input": {"file_path": ".env"}})
+        result = _run_cli({"tool_name": "Grep", "tool_input": {"pattern": ".env"}})
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
 

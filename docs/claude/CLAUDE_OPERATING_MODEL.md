@@ -315,7 +315,7 @@ F.1의 5개 read-only reviewer subagent 각각을 감싸는 5개 manual-only ski
    `defaultMode`, `disableBypassPermissionsMode`는 이 PR에서 설정하지 않는다
    (기존 동작을 완화하거나 확장하지 않고, 오직 deny만 추가한다).
 2. **PreToolUse policy guard hook** (`.claude/hooks/policy_guard.py`,
-   matcher `Bash|Edit|Write|MultiEdit|NotebookEdit`) — permission 패턴만으로 표현하기 어려운 동적
+   matcher `Bash|Edit|Write|MultiEdit|NotebookEdit|Read`) — permission 패턴만으로 표현하기 어려운 동적
    판단(예: compound bash 명령, 파일 내용 검사)을 결정론적으로 수행한다.
 
 두 계층의 역할은 다르다: deny rule은 **정적 패턴**(경로, 정확한 명령 prefix)만
