@@ -50,6 +50,8 @@
 | LLM usage policy | `docs/08_LLM_USAGE_POLICY.md` | `../CLAUDE.md` (LLM Usage Policy 절) | |
 | Claude / dev workflow | `docs/09_CLAUDE_WORKFLOW.md` | `../CLAUDE.md` (Development Workflow 절), `docs/claude/CLAUDE_OPERATING_MODEL.md`, `docs/claude/PM_HANDOFF.md` | PR #3 에서 v4로 갱신. 상세 실행 절차는 `CLAUDE_OPERATING_MODEL.md`(supporting reference), 현재 상태 스냅샷은 `PM_HANDOFF.md`(supporting reference / current snapshot, source of truth 아님) |
 | Project reviewer subagents | `.claude/agents/*.md` (executable definitions) | `docs/09_CLAUDE_WORKFLOW.md` §F.1 (normative workflow), `docs/claude/CLAUDE_OPERATING_MODEL.md` §13 (supporting procedure) | PR #4 에서 구현. 5개 read-only reviewer(`architecture-reviewer`, `java-oms-reviewer`, `python-research-reviewer`, `risk-reviewer`, `test-reviewer`). implementation agent 아님. CodeRabbit/security-gates 대체 아님 |
+| Project reviewer skills | `.claude/skills/review-*/SKILL.md` (executable definitions) | `docs/09_CLAUDE_WORKFLOW.md` §F.2 (normative workflow), `docs/claude/CLAUDE_OPERATING_MODEL.md` §14 (supporting procedure) | PR #5 에서 구현. 위 5개 reviewer subagent를 감싸는 manual-only wrapper 5개(`disable-model-invocation: true`, `context: fork`). side effect 없음 |
+| Project permission/hook guardrails | `.claude/settings.json`, `.claude/hooks/policy_guard.py` | `docs/09_CLAUDE_WORKFLOW.md` §F.2, `docs/claude/CLAUDE_OPERATING_MODEL.md` §14 | PR #5 에서 구현. deny-only permission rule + PreToolUse policy guard hook(표준 라이브러리만 사용). 지원 테스트: `tests/claude/test_policy_guard.py`. pre-execution 층이며 CodeRabbit/security-gates(pre-merge 층)를 대체하지 않음 |
 | Open questions / risks | `docs/10_OPEN_QUESTIONS_AND_RISKS.md` | `docs/00_MASTER_SUMMARY.md` §10 | |
 | Decision log | `docs/11_DECISION_LOG.md` | — | 확정된 결정의 기준 기록 |
 | Setup (WSL/local) | `docs/LOCAL_SETUP_WSL.md` | `../README_BOOTSTRAP.md` | |
@@ -136,6 +138,9 @@ docs/
 
 .claude/
   agents/                          # project reviewer subagents (5 files, read-only)
+  skills/                          # project reviewer skills (5 files, manual-only wrapper)
+  hooks/                           # policy_guard.py (PreToolUse policy guard)
+  settings.json                    # deny-only permission rules + PreToolUse hook registration
 ```
 
 > 위 구조는 제안이며, 실제 파일 이동/생성은 후속 PR에서 별도로 진행한다.

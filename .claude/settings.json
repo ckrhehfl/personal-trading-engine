@@ -1,0 +1,88 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(**/secrets/**)",
+      "Read(**/credentials/**)",
+      "Read(**/private/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.config/gcloud/**)",
+
+      "Edit(.env)",
+      "Edit(**/secrets/**)",
+      "Edit(**/credentials/**)",
+      "Edit(**/private/**)",
+      "Edit(~/.ssh/**)",
+      "Edit(~/.aws/**)",
+      "Edit(~/.config/gcloud/**)",
+
+      "Write(.env)",
+      "Write(**/secrets/**)",
+      "Write(**/credentials/**)",
+      "Write(**/private/**)",
+      "Write(~/.ssh/**)",
+      "Write(~/.aws/**)",
+      "Write(~/.config/gcloud/**)",
+
+      "MultiEdit(.env)",
+      "MultiEdit(**/secrets/**)",
+      "MultiEdit(**/credentials/**)",
+      "MultiEdit(**/private/**)",
+      "MultiEdit(~/.ssh/**)",
+      "MultiEdit(~/.aws/**)",
+      "MultiEdit(~/.config/gcloud/**)",
+
+      "NotebookEdit(**/secrets/**)",
+      "NotebookEdit(**/credentials/**)",
+      "NotebookEdit(**/private/**)",
+      "NotebookEdit(~/.ssh/**)",
+      "NotebookEdit(~/.aws/**)",
+      "NotebookEdit(~/.config/gcloud/**)",
+
+      "Edit(/docs/05_RISK_POLICY.md)",
+      "Write(/docs/05_RISK_POLICY.md)",
+      "MultiEdit(/docs/05_RISK_POLICY.md)",
+
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin HEAD:main)",
+      "Bash(git push origin HEAD:main *)",
+
+      "Bash(git push --force)",
+      "Bash(git push --force *)",
+      "Bash(git push -f)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease)",
+      "Bash(git push --force-with-lease *)",
+
+      "Bash(gh pr merge)",
+      "Bash(gh pr merge *)",
+
+      "Bash(gh repo edit)",
+      "Bash(gh repo edit *)",
+
+      "Bash(rm -rf)",
+      "Bash(rm -rf *)",
+      "Bash(rm -fr)",
+      "Bash(rm -fr *)",
+
+      "mcp__*"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/policy_guard.py"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

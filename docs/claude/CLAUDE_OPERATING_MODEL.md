@@ -220,11 +220,13 @@ GitHub App 연동도 이번 범위가 아니다. 지금은 "이런 변경에는 
 - CodeRabbit 리뷰
 - `security-gates` deterministic check
 - project reviewer subagents 5개 (`.claude/agents/*.md`, §13 참고)
+- project skills 5개 (`.claude/skills/review-*/SKILL.md`, manual-only reviewer
+  wrapper, §14 참고)
+- project 수준 deny permission rules + PreToolUse policy guard hook
+  (`.claude/settings.json`, `.claude/hooks/policy_guard.py`, §14 참고)
 
 **Planned (미구현):**
 
-- skills / slash commands
-- hooks / permissions
 - implementation agents (구현자 subagent)
 - shared schema skeleton
 - Java/Python 코드 skeleton
@@ -273,3 +275,91 @@ surface는 영향을 받지 않는다.
   `DECISION_REQUIRED`로 보고한다.
 - R4 인접 변경은 기본적으로 `BLOCKED` 또는 `DECISION_REQUIRED`로 취급한다.
 - 구체적인 delegation table은 `docs/09_CLAUDE_WORKFLOW.md` §F.1을 본다.
+
+---
+
+## 14. Project skills와 permission/hook guardrail (PR #5)
+
+### 14.1 Skill invocation model
+
+이 저장소는 project custom command를 `.claude/commands/`가 아니라
+`.claude/skills/<name>/SKILL.md` 형식으로 구현한다. 두 형식은 현재 Claude Code
+버전에서 동등하게 로드되며 파일 레이아웃만 다르다. `.claude/skills/`를 택한
+이유:
+
+- reviewer subagent를 감싸는 wrapper(`context: fork` + `agent:`)를 표현하는
+  frontmatter 필드가 skill 형식에 있다.
+- 향후 skill이 늘어날 경우 `references/`, `examples/`, `scripts/` 하위 구조로
+  확장 가능하다(이번 PR에서는 사용하지 않음).
+
+F.1의 5개 read-only reviewer subagent 각각을 감싸는 5개 manual-only skill이
+있다(`docs/09_CLAUDE_WORKFLOW.md` §F.2 표 참고). 모든 skill은:
+
+- `disable-model-invocation: true` — model이 자동으로 호출할 수 없다. 사용자가
+  `/review-*`를 직접 입력해야 실행된다.
+- `context: fork` — 격리된 fork 세션에서 실행되며 대응하는 `agent:`를 지정한다.
+- `allowed-tools` 사전 승인을 사용하지 않는다 — 감싸는 reviewer agent 자체의
+  tool boundary(`Read`, `Grep`, `Glob`)를 그대로 상속한다.
+- side effect가 없다 — 파일을 만들거나 수정하지 않고, commit/push/PR/merge
+  action을 수행하지 않는다.
+
+이 skill들은 **implementation agent가 아니다.** 구현자 subagent는 여전히
+미구현이며(§12), 이 PR의 범위 밖이다.
+
+### 14.2 Deny rules와 PreToolUse hook의 역할 분담
+
+`.claude/settings.json`은 두 개의 안전 계층을 추가한다:
+
+1. **`permissions.deny`** — Claude Code의 permission engine이 특정
+   `Tool(specifier)` 패턴을 사전에 거부한다. `permissions.allow`/`.ask`,
+   `defaultMode`, `disableBypassPermissionsMode`는 이 PR에서 설정하지 않는다
+   (기존 동작을 완화하거나 확장하지 않고, 오직 deny만 추가한다).
+2. **PreToolUse policy guard hook** (`.claude/hooks/policy_guard.py`,
+   matcher `Bash|Edit|Write`) — permission 패턴만으로 표현하기 어려운 동적
+   판단(예: compound bash 명령, 파일 내용 검사)을 결정론적으로 수행한다.
+
+두 계층의 역할은 다르다: deny rule은 **정적 패턴**(경로, 정확한 명령 prefix)만
+표현할 수 있고, hook은 **명령 내용/파일 내용을 파싱**해 판단할 수 있다. 이
+때문에 예를 들어 "docs/05_RISK_POLICY.md 수정 금지"는 deny rule만으로 충분하지만,
+"live trading flag가 파일 내용에 true로 설정되는지"는 hook이 아니면 판단할 수
+없다. 이 PR의 hook은 `scripts/ci/security_gates.py`가 이미 확인하는 것과 일부
+겹치는 패턴(예: live trading flag, pipe-to-shell install)도 의도적으로
+중복 검사한다 — pre-execution 층(hook)과 pre-merge 층(`security-gates`)이
+서로 다른 시점에 독립적으로 동작하는 defense-in-depth이기 때문이다.
+
+### 14.3 `--dangerously-skip-permissions`에서의 운영 원칙
+
+§4에서 이미 정의한 대로, permission bypass 모드 자체는 safety boundary가
+아니다. 이 PR이 추가하는 project 수준 explicit deny rule과 PreToolUse hook은
+그 원칙을 실제로 뒷받침하는 장치다: `--dangerously-skip-permissions`로 parent
+session이 실행되어 매 tool 호출마다 확인창이 뜨지 않더라도, project
+`.claude/settings.json`에 등록된 deny rule과 hook은 계속 평가된다. 즉 이
+guardrail들은 "확인창을 생략한다"는 bypass 모드의 의미와 별개로 유지되는
+project 수준 정책이다.
+
+단, 이것이 완전한 sandbox라는 뜻은 아니다. 알려진 한계:
+
+- hook은 `shlex` 기반 best-effort 패턴 매처이며 **완전한 shell parser가
+  아니다.** 의도적으로 난독화된 명령(예: 변수 치환, 중첩 서브셸, 문자열 분할로
+  쪼갠 명령)은 통과할 수 있다.
+- 파일 경로/내용 검사는 hook에 전달된 `tool_input`에 근거하며, 간접적인
+  subprocess 호출(예: 다른 스크립트를 통해 파일을 쓰는 경로)은 이 model-level
+  hook의 검사 대상이 아니다.
+- `.claude/settings.json`/`.claude/hooks/policy_guard.py` 자체의 무결성은
+  아직 `security-gates`가 별도로 고정(freeze)하지 않는다 — 즉 이 파일들이
+  후속 PR에서 약화되지 않도록 보장하는 기계적 장치는 아직 없다.
+- PreToolUse hook은 `Bash|Edit|Write`에만 등록된다. `MultiEdit`/`NotebookEdit`
+  tool을 통한 파일 변경은 `permissions.deny`의 경로 기반 규칙(secret path
+  차단)만 적용받고, hook의 내용 검사(live trading flag 탐지)는 적용받지 않는다.
+- `context: fork` + `agent:`가 감싸는 reviewer subagent의 tool 제약을 forked
+  실행 컨텍스트에 구조적으로 강제하는지는 실제 라이브 호출로 경험적으로
+  검증하지 않았다.
+- hook timeout(5초) 또는 `python3` spawn 실패 시 harness가 fail-open으로
+  처리하는지 fail-closed로 처리하는지 확인하지 않았다 — harness 레벨 동작이며
+  `policy_guard.py`의 통제 범위 밖이다.
+
+### 14.4 Implemented/planned 갱신
+
+§12의 Implemented 목록에 project skills 5개와 project 수준 deny
+rule/PreToolUse hook을 추가했다. Skills/hooks/permissions는 더 이상 "Planned"가
+아니다. 최신 상태는 `docs/claude/PM_HANDOFF.md`를 확인한다.

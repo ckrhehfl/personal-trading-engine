@@ -101,16 +101,17 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 | 항목 | 상태 |
 |---|---|
 | Project subagents | **구현됨** (`.claude/agents/*.md`, 5개 read-only reviewer, 아래 F.1 참고) |
-| Skills / slash commands | 미구현 |
-| Hooks / permissions | 미구현 |
+| Skills / slash commands | **구현됨** (`.claude/skills/review-*/SKILL.md`, 5개 manual-only reviewer skill, 아래 F.2 참고) |
+| Hooks / permissions | **구현됨** (`.claude/settings.json` deny rules + PreToolUse policy guard hook, 아래 F.2 참고) |
 | Implementation agents | 미구현 |
 | `CodeRabbit` required check | 구현됨 (PR #1) |
 | `security-gates` required check | 구현됨 (PR #2) |
 
 v3에 있던 subagent/hooks 추천 목록은 **"추천"이지 "현재 사용 가능"이 아니다.**
-project subagent는 이번 PR에서 5개 read-only reviewer만 구현했다. implementer
-agent, skills/slash command, hooks/permissions는 아직 미구현이며 후속 PR에서
-진행한다. 진행 시 이 표와 `docs/claude/PM_HANDOFF.md`를 함께 갱신한다.
+이번 PR(#5)까지 project subagent 5개(read-only reviewer), 그 5개를 감싸는
+manual-only skill 5개, 그리고 project 수준 deny permission + PreToolUse policy
+hook이 구현되었다. implementer agent는 여전히 미구현이며 후속 PR에서 진행한다.
+진행 시 이 표와 `docs/claude/PM_HANDOFF.md`를 함께 갱신한다.
 
 ### F.1 Implemented project reviewer subagents
 
@@ -130,3 +131,41 @@ authority도 아니다.
 
 이 subagent들의 상세 tool boundary와 역할 설명은
 `docs/claude/CLAUDE_OPERATING_MODEL.md`를 본다.
+
+### F.2 Implemented project skills and permission/hook guardrails (PR #5)
+
+F.1의 5개 reviewer subagent를 **사용자가 직접 호출**할 수 있도록 감싼 5개
+manual-only project skill이 `.claude/skills/review-*/SKILL.md`에 구현되어
+있다. 모두 `disable-model-invocation: true`, `context: fork`이며, 대응하는
+`agent`를 명시적으로 지정한다 — 즉 model이 자동으로 호출할 수 없고, 항상
+`/review-*` 형태로 사용자가 직접 호출해야 하며, 호출 시 격리된 fork 세션에서
+실행된다.
+
+| 명령 | 감싸는 reviewer agent |
+|---|---|
+| `/review-architecture` | `architecture-reviewer` |
+| `/review-oms` | `java-oms-reviewer` |
+| `/review-backtest` | `python-research-reviewer` |
+| `/review-risk` | `risk-reviewer` |
+| `/review-tests` | `test-reviewer` |
+
+이 skill들은 side-effect가 없는 **wrapper**다. 파일을 만들거나 수정하지 않고,
+새 권한을 부여하지 않으며, 감싸는 reviewer agent의 tool boundary(`Read`,
+`Grep`, `Glob`만)를 그대로 상속한다. `allowed-tools` 사전 승인, skill-scoped
+hook, `!` shell injection은 사용하지 않는다. 이 저장소는 `.claude/commands/`
+대신 이 skill 형식을 사용한다(현재 Claude Code 버전에서 두 형식이 동등하게
+동작하므로, project custom command는 전부 skill로 구현한다).
+
+같은 PR에서 `.claude/settings.json`에 project 수준 **deny-only permission
+규칙**과 단일 **PreToolUse policy guard hook**(`.claude/hooks/policy_guard.py`,
+표준 라이브러리만 사용)이 추가되었다. 이 hook은 `Bash|Edit|Write` 호출마다
+실행되며, secret/private 경로 쓰기, live trading flag 활성화 문자열, 그리고
+일부 위험한 Bash 패턴(main 직접 push, force push, `gh pr merge`, branch
+protection mutation, `rm -rf`, `docker --privileged`, BingX live order
+endpoint 등)을 결정론적으로 차단한다. 상세 위협 모델과 한계는
+`docs/claude/CLAUDE_OPERATING_MODEL.md` §14를 본다.
+
+이 permission deny + hook 계층은 **pre-execution** 층이며, `CodeRabbit`/
+`security-gates`(pre-merge 층)를 대체하지 않는다. 서로 보완하는 별개의 층이다.
+hook은 완전한 shell parser가 아니며 모든 우회를 잡는다고 주장하지 않는다 —
+알려진 한계는 `docs/claude/PM_HANDOFF.md` §4를 본다.
