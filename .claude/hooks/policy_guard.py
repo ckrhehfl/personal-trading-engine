@@ -230,6 +230,7 @@ def _resolve_wrapped_command(
 _GIT_COMMANDS = frozenset({"git"})
 _RM_COMMANDS = frozenset({"rm"})
 _DOCKER_COMMANDS = frozenset({"docker"})
+_GH_COMMANDS = frozenset({"gh"})
 
 
 def _check_git_push(tokens: list[str]) -> Finding | None:
@@ -247,14 +248,20 @@ def _check_git_push(tokens: list[str]) -> Finding | None:
 
 
 def _check_gh_pr_merge(tokens: list[str]) -> Finding | None:
-    if len(tokens) >= 3 and tokens[0] == "gh" and tokens[1] == "pr" and tokens[2] == "merge":
+    command_name, rest = _resolve_wrapped_command(tokens, _GH_COMMANDS)
+    if command_name != "gh":
+        return None
+    if len(rest) >= 2 and rest[0] == "pr" and rest[1] == "merge":
         return Finding("PR_MERGE_BLOCKED", "gh pr merge is not permitted")
     return None
 
 
 def _check_gh_repo_edit(tokens: list[str]) -> Finding | None:
-    if len(tokens) >= 3 and tokens[0] == "gh" and tokens[1] == "repo" and tokens[2] == "edit":
-        if any(t.startswith("--visibility") for t in tokens[3:]):
+    command_name, rest = _resolve_wrapped_command(tokens, _GH_COMMANDS)
+    if command_name != "gh":
+        return None
+    if len(rest) >= 2 and rest[0] == "repo" and rest[1] == "edit":
+        if any(t.startswith("--visibility") for t in rest[2:]):
             return Finding(
                 "REPOSITORY_VISIBILITY_CHANGE", "gh repo edit changes repository visibility"
             )
@@ -274,9 +281,12 @@ def _extract_gh_api_method(tokens: list[str]) -> str | None:
 
 
 def _check_gh_api_branch_protection(tokens: list[str]) -> Finding | None:
-    if len(tokens) < 2 or tokens[0] != "gh" or tokens[1] != "api":
+    command_name, gh_rest = _resolve_wrapped_command(tokens, _GH_COMMANDS)
+    if command_name != "gh":
         return None
-    rest = tokens[2:]
+    if len(gh_rest) < 1 or gh_rest[0] != "api":
+        return None
+    rest = gh_rest[1:]
     touches_branch_protection = any(
         "branches/" in t and "protection" in t for t in rest
     )

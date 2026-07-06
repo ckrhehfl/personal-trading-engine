@@ -609,6 +609,53 @@ class ReadDispatchCases(unittest.TestCase):
     def test_bash_sudo_wrapped_ordinary_git_push_is_safe(self):
         self.assertIsNone(pg.evaluate_bash("sudo git push origin feature-x"))
 
+    def test_bash_sudo_gh_pr_merge_is_blocked(self):
+        finding = pg.evaluate_bash("sudo gh pr merge")
+        self.assertEqual(finding.code, "PR_MERGE_BLOCKED")
+
+    def test_bash_env_gh_pr_merge_is_blocked(self):
+        finding = pg.evaluate_bash("env gh pr merge")
+        self.assertEqual(finding.code, "PR_MERGE_BLOCKED")
+
+    def test_bash_sudo_gh_repo_edit_visibility_is_blocked(self):
+        finding = pg.evaluate_bash("sudo gh repo edit --visibility private")
+        self.assertEqual(finding.code, "REPOSITORY_VISIBILITY_CHANGE")
+
+    def test_bash_env_dash_i_gh_repo_edit_visibility_equals_is_blocked(self):
+        finding = pg.evaluate_bash("env -i gh repo edit --visibility=public")
+        self.assertEqual(finding.code, "REPOSITORY_VISIBILITY_CHANGE")
+
+    def test_bash_sudo_gh_api_delete_branch_protection_is_blocked(self):
+        finding = pg.evaluate_bash(
+            "sudo gh api -X DELETE repos/o/r/branches/main/protection"
+        )
+        self.assertEqual(finding.code, "BRANCH_PROTECTION_MUTATION")
+
+    def test_bash_env_gh_api_patch_branch_protection_is_blocked(self):
+        finding = pg.evaluate_bash(
+            "env gh api --method PATCH repos/o/r/branches/main/protection"
+        )
+        self.assertEqual(finding.code, "BRANCH_PROTECTION_MUTATION")
+
+    def test_bash_sudo_gh_pr_create_is_safe(self):
+        self.assertIsNone(pg.evaluate_bash("sudo gh pr create"))
+
+    def test_bash_env_gh_pr_checks_is_safe(self):
+        self.assertIsNone(pg.evaluate_bash("env gh pr checks"))
+
+    def test_bash_sudo_gh_repo_view_is_safe(self):
+        self.assertIsNone(pg.evaluate_bash("sudo gh repo view"))
+
+    def test_bash_sudo_gh_api_branch_protection_get_is_safe(self):
+        self.assertIsNone(
+            pg.evaluate_bash("sudo gh api repos/o/r/branches/main/protection")
+        )
+
+    def test_bash_env_gh_api_branch_protection_get_is_safe(self):
+        self.assertIsNone(
+            pg.evaluate_bash("env gh api repos/o/r/branches/main/protection")
+        )
+
 
 # --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
