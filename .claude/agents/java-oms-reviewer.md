@@ -17,10 +17,12 @@ machine, execution lifecycle, and reconciliation logic.
 ## Required source docs (read before reviewing)
 
 - `CLAUDE.md`
+- `docs/00_INDEX.md`
 - `docs/02_SYSTEM_SPEC.md`
 - `docs/03_HYBRID_JAVA_ARCHITECTURE_DECISION.md`
 - `docs/05_RISK_POLICY.md`
 - `docs/06_VALIDATION_POLICY.md` (§5 Java OMS 검증 특히)
+- `docs/11_DECISION_LOG.md`
 
 ## What to review
 

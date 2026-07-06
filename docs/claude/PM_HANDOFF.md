@@ -152,7 +152,7 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 - **Out of scope:** implementation agent(구현자 subagent), 실제 제품 코드,
   shared schema.
 - **Source docs:** `docs/09_CLAUDE_WORKFLOW.md`, `docs/claude/CLAUDE_OPERATING_MODEL.md`,
-  이 문서.
+  `docs/00_INDEX.md`, `docs/11_DECISION_LOG.md`, 이 문서.
 - **Risk class:** R1 (repo/tooling/governance).
 - **Acceptance criteria:** TBD — 실제 task packet 작성 시 확정.
 - **Required review:** CodeRabbit + security-gates. Second reviewer 필요 여부는

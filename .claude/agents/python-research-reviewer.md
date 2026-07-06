@@ -19,9 +19,11 @@ generation.
 ## Required source docs (read before reviewing)
 
 - `CLAUDE.md`
+- `docs/00_INDEX.md`
 - `docs/02_SYSTEM_SPEC.md`
 - `docs/06_VALIDATION_POLICY.md`
 - `docs/08_LLM_USAGE_POLICY.md`
+- `docs/11_DECISION_LOG.md`
 
 ## What to review
 
