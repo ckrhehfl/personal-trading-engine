@@ -1,9 +1,9 @@
 # PM Handoff
 
 **Status:** supporting reference / current snapshot (living document, not source of truth)
-**Last verified main SHA:** `801de65a20b5765b0e78f4441eb9309a11bcebb7`
+**Last verified base main SHA:** `717c2490b260b05d56d25e4c44cb812867499956`
 **Repository visibility:** public
-**Current phase:** architecture / governance / CI foundation (no product code yet)
+**Current phase:** architecture / governance / CI / Claude reviewer-agent foundation (no product code yet)
 
 > **Source-of-truth warning:** 이 문서는 "지금 상태가 무엇인지" 요약하는
 > 스냅샷이다. 제품/리스크/아키텍처 결정을 여기서 새로 확정하지 않는다. 값이
@@ -23,6 +23,11 @@
 - Secret scanning 활성화
 - Push protection 활성화
 - PR #2 — deterministic security gates (`security-gates` required check)
+- PR #3 — Claude operating model / PM handoff 문서화
+- PR #4 — project reviewer subagents 5개 (`architecture-reviewer`,
+  `java-oms-reviewer`, `python-research-reviewer`, `risk-reviewer`,
+  `test-reviewer`), 전부 `.claude/agents/*.md`, read-only
+  (`tools: Read, Grep, Glob`)
 
 **현재 required checks** (GitHub API 실측, `branches/main/protection`):
 
@@ -90,7 +95,11 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 - 숫자형 risk relaxation semantic comparison 없음
 - Python 직접 주문 탐지기는 알려진 BingX endpoint 문자열만 커버(좁은 범위)
 - `security-gates`의 워크플로우 하드닝 검사는 전체 YAML 파서가 아닌 line 기반
-- project subagents 미구현
+- project reviewer subagent는 read-only reviewer 5개뿐이다 — implementation
+  agent(구현자)는 아직 없음
+- 언제 어떤 reviewer subagent를 호출해야 하는지에 대한 자동 강제(enforcement)가
+  없다 — `docs/09_CLAUDE_WORKFLOW.md` §F.1 delegation table은 가이드일 뿐,
+  자동으로 강제되지 않는다
 - skills / slash commands / hooks / permissions 미구현
 - second AI reviewer 자동화 미구현(문서상 요구사항만 존재)
 
@@ -118,8 +127,8 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 
 번호는 논리적 순서이며 실제 GitHub PR 번호를 미리 단정하지 않는다.
 
-1. (이번 PR) Claude operating model / PM handoff
-2. Project subagents
+1. Claude operating model / PM handoff (완료, PR #3)
+2. (이번 PR) Project reviewer subagents
 3. Skills / slash commands / hooks / permissions
 4. Shared schema skeleton
 5. Java OMS state machine skeleton
@@ -130,30 +139,26 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 
 ---
 
-## 7. Next task packet (Project subagents)
+## 7. Next task packet (Skills / slash commands / hooks / permissions)
 
-실제 subagent 파일은 이번 PR에서 만들지 않는다. 다음 작업을 위한 준비된
-task packet:
+이번 PR(#4)에서 project reviewer subagent 5개는 이미 구현되었다
+(`.claude/agents/*.md`, §1 참고). 다음 작업을 위한 준비된 task packet이며,
+**이번 PR에서 구현하지 않는다**:
 
-- **Goal:** 저장소에서 반복적으로 필요한 역할(quant-researcher,
-  backtest-engineer, java-oms-engineer, risk-manager, execution-engineer,
-  security-reviewer, test-engineer, docs-pm 등, `docs/09_CLAUDE_WORKFLOW.md`
-  v3의 추천 목록 재검토 후 확정)을 project-level subagent로 정의한다.
-- **In scope:** `.claude/agents/*.md` 정의 파일 생성, 각 agent의 tool 범위와
-  risk class 매핑 문서화.
-- **Out of scope:** hooks, permissions, 실제 제품 코드, skill/slash command
-  구현.
+- **Goal:** skills/slash command, hooks, permissions 설계를 검토하고 필요한
+  최소 범위만 구현한다.
+- **In scope:** 설계 검토, 최소 skill/slash command 후보 선정, hooks/permissions
+  필요성 평가.
+- **Out of scope:** implementation agent(구현자 subagent), 실제 제품 코드,
+  shared schema.
 - **Source docs:** `docs/09_CLAUDE_WORKFLOW.md`, `docs/claude/CLAUDE_OPERATING_MODEL.md`,
-  이 문서.
+  `docs/00_INDEX.md`, `docs/11_DECISION_LOG.md`, 이 문서.
 - **Risk class:** R1 (repo/tooling/governance).
-- **Acceptance criteria:** 각 subagent가 명시적 역할/도구 범위/risk class를
-  갖고, `docs/09_CLAUDE_WORKFLOW.md` §F 표가 "미구현"에서 "구현됨"으로 갱신됨.
-- **Validation:** 문서 링크 무결성, 기존 gate(CodeRabbit/security-gates) 통과.
-- **Required review:** CodeRabbit + security-gates. Second reviewer는 불필요
-  (문서/설정 범위, R1).
-- **Stop conditions:** subagent 정의가 CLAUDE.md의 비협상 규칙을 완화하려는
-  경우, 또는 R4 범위(live/risk/credential) 작업을 자동 승인하는 방향으로
-  설계되는 경우.
+- **Acceptance criteria:** TBD — 실제 task packet 작성 시 확정.
+- **Required review:** CodeRabbit + security-gates. Second reviewer 필요 여부는
+  실제 범위 확정 후 재평가.
+- **Stop conditions:** CLAUDE.md의 비협상 규칙을 완화하려는 설계, 또는 R4
+  범위(live/risk/credential) 작업을 자동화하려는 방향으로 설계되는 경우.
 
 ---
 

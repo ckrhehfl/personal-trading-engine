@@ -100,12 +100,33 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 
 | 항목 | 상태 |
 |---|---|
-| Project subagents | 미구현(계획, `docs/claude/PM_HANDOFF.md` §6 참고) |
+| Project subagents | **구현됨** (`.claude/agents/*.md`, 5개 read-only reviewer, 아래 F.1 참고) |
 | Skills / slash commands | 미구현 |
 | Hooks / permissions | 미구현 |
+| Implementation agents | 미구현 |
 | `CodeRabbit` required check | 구현됨 (PR #1) |
 | `security-gates` required check | 구현됨 (PR #2) |
 
 v3에 있던 subagent/hooks 추천 목록은 **"추천"이지 "현재 사용 가능"이 아니다.**
-실제 구현은 후속 PR에서 진행하며, 진행 시 이 표와 `docs/claude/PM_HANDOFF.md`를
-함께 갱신한다.
+project subagent는 이번 PR에서 5개 read-only reviewer만 구현했다. implementer
+agent, skills/slash command, hooks/permissions는 아직 미구현이며 후속 PR에서
+진행한다. 진행 시 이 표와 `docs/claude/PM_HANDOFF.md`를 함께 갱신한다.
+
+### F.1 Implemented project reviewer subagents
+
+다음 5개는 `.claude/agents/*.md`에 정의된 **read-only reviewer** subagent다.
+모두 `tools: Read, Grep, Glob`, `model: inherit`만 사용하며 파일 수정, shell
+실행, nested agent 생성, MCP 사용이 tool pool에 아예 존재하지 않는다. 구현자
+agent가 아니며, CodeRabbit/`security-gates`를 대체하지 않는다. 최종 merge
+authority도 아니다.
+
+| 변경 유형 | 기본 reviewer |
+|---|---|
+| architecture / ADR / schema contract | `architecture-reviewer` |
+| Java OMS / state lifecycle | `java-oms-reviewer` + `test-reviewer` |
+| Python research / backtest | `python-research-reviewer` + `test-reviewer` |
+| risk / R4-adjacent | `risk-reviewer` |
+| cross-language / high-risk runtime 변경 | `architecture-reviewer` + 해당 domain reviewer + second AI reviewer policy(`docs/claude/CLAUDE_OPERATING_MODEL.md` §9) |
+
+이 subagent들의 상세 tool boundary와 역할 설명은
+`docs/claude/CLAUDE_OPERATING_MODEL.md`를 본다.
