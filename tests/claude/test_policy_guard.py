@@ -656,6 +656,18 @@ class ReadDispatchCases(unittest.TestCase):
             pg.evaluate_bash("env gh api repos/o/r/branches/main/protection")
         )
 
+    def test_bash_sudo_gh_api_lowercase_delete_branch_protection_is_blocked(self):
+        finding = pg.evaluate_bash(
+            "sudo gh api -X delete repos/o/r/branches/main/protection"
+        )
+        self.assertEqual(finding.code, "BRANCH_PROTECTION_MUTATION")
+
+    def test_bash_gh_api_method_equals_patch_branch_protection_is_blocked(self):
+        finding = pg.evaluate_bash(
+            "gh api --method=PATCH repos/o/r/branches/main/protection"
+        )
+        self.assertEqual(finding.code, "BRANCH_PROTECTION_MUTATION")
+
 
 # --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
