@@ -133,16 +133,19 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
   (`tool_input.path`만 검사, 검색 패턴/내용은 검사하지 않음). 다만 이 목록에
   없는 다른 read 계열 도구(예: 언어 런타임을 통한 파일 열람, `dd`, 커스텀
   스크립트)는 여전히 커버되지 않는다 — 완전한 목록이라고 주장하지 않는다
-- (PR #5, CodeRabbit finding 4차/5차 반영) `_check_read_style_secret_access`는
-  `sudo`/`env` wrapper(플래그 포함, 예: `sudo -u root cat .env`, `env -i cat
-  .env`)와 `KEY=VALUE` 환경변수 접두어를 건너뛰고 명령을 절대경로가 아닌
-  basename으로 정규화한 뒤 판정한다. `--include=.env`처럼 값이 `=` 뒤에
-  병합된 플래그도 그 값을 검사한다. 이 정규화는 read-style 명령 판정에만
-  적용된다 — `_check_git_push`/`_check_rm`/`_check_docker_privileged` 등 다른
-  segment check는 wrapper-stripping을 적용하지 않으므로 **`sudo rm -rf`나
-  `sudo git push origin main` 같은 조합은 현재 감지되지 않는다**(각 check가
-  `tokens[0]`이 정확히 자신의 명령 이름인지만 보기 때문). 다른 check에도
-  동일한 wrapper-stripping을 적용하는 것은 후속 개선 후보다.
+- (PR #5, CodeRabbit finding 4차/5차/6차 반영) `_resolve_wrapped_command`
+  (구 `_resolve_command_head`를 일반화)는 `sudo`/`env` wrapper(플래그 포함,
+  예: `sudo -u root cat .env`, `env -i cat .env`)와 `KEY=VALUE` 환경변수
+  접두어를 건너뛰고 명령을 절대경로가 아닌 basename으로 정규화한 뒤 판정한다.
+  `--include=.env`처럼 값이 `=` 뒤에 병합된 플래그도 그 값을 검사한다. 이
+  정규화는 이제 `_check_read_style_secret_access`뿐 아니라
+  `_check_git_push`/`_check_rm`/`_check_docker_privileged`에도 적용되어
+  `sudo rm -rf`, `sudo git push origin main`, `sudo docker --privileged`도
+  감지된다. `_check_gh_pr_merge`/`_check_gh_repo_edit`/
+  `_check_gh_api_branch_protection`는 아직 이 정규화를 적용하지 않는다(예:
+  `sudo gh pr merge`는 감지되지 않음) — CodeRabbit이 아직 지적하지 않은
+  잔여 범위이며, 이런 wrapper-obfuscation 대응은 패턴 매처의 근본적으로
+  끝이 없는 영역이라는 점을 명시한다(완전한 shell parser가 아님).
 - (PR #5) `context: fork` + `agent:` 조합이 감싸는 reviewer subagent의
   `tools: Read, Grep, Glob` 제약을 forked 실행 컨텍스트에 구조적으로
   강제하는지는 실제 라이브 세션에서 별도로 검증되지 않았다 — 문서상 동작

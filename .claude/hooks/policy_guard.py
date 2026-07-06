@@ -195,10 +195,48 @@ def _logical_segments(command: str) -> list[list[str]]:
     return [seg for seg in segments if seg]
 
 
+_COMMAND_WRAPPERS = frozenset({"sudo", "env"})
+_ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def _resolve_wrapped_command(
+    tokens: list[str], known_commands: frozenset[str]
+) -> tuple[str, list[str]]:
+    """Skip a leading sudo/env wrapper (and its own flags/env assignments),
+    then resolve the actual command to its basename (so /bin/cat and cat are
+    treated the same). Requires a target command set rather than blindly
+    taking "the next token" after a wrapper, since a wrapper flag can itself
+    take a value (e.g. "sudo -u root cat", where naive skipping would treat
+    "root" as the command)."""
+    idx = 0
+    saw_wrapper = False
+    while idx < len(tokens) and (
+        tokens[idx] in _COMMAND_WRAPPERS or _ENV_ASSIGNMENT_RE.match(tokens[idx])
+    ):
+        saw_wrapper = True
+        idx += 1
+    if saw_wrapper:
+        while (
+            idx < len(tokens)
+            and tokens[idx].rsplit("/", 1)[-1] not in known_commands
+        ):
+            idx += 1
+    if idx >= len(tokens):
+        return "", []
+    head = tokens[idx].rsplit("/", 1)[-1]
+    return head, tokens[idx + 1 :]
+
+
+_GIT_COMMANDS = frozenset({"git"})
+_RM_COMMANDS = frozenset({"rm"})
+_DOCKER_COMMANDS = frozenset({"docker"})
+
+
 def _check_git_push(tokens: list[str]) -> Finding | None:
-    if len(tokens) < 2 or tokens[0] != "git" or tokens[1] != "push":
+    command_name, rest = _resolve_wrapped_command(tokens, _GIT_COMMANDS)
+    if command_name not in _GIT_COMMANDS or not rest or rest[0] != "push":
         return None
-    args = tokens[2:]
+    args = rest[1:]
     flags = [t for t in args if t.startswith("-")]
     positional = [t for t in args if not t.startswith("-")]
     if any(f in _FORCE_PUSH_FLAGS or f.startswith("--force-with-lease=") for f in flags):
@@ -253,9 +291,9 @@ def _check_gh_api_branch_protection(tokens: list[str]) -> Finding | None:
 
 
 def _check_rm(tokens: list[str]) -> Finding | None:
-    if not tokens or tokens[0] != "rm":
+    command_name, args = _resolve_wrapped_command(tokens, _RM_COMMANDS)
+    if command_name not in _RM_COMMANDS:
         return None
-    args = tokens[1:]
 
     def _short_flag_has(tok: str, ch: str) -> bool:
         return tok.startswith("-") and not tok.startswith("--") and ch in tok[1:]
@@ -273,9 +311,10 @@ def _check_rm(tokens: list[str]) -> Finding | None:
 
 
 def _check_docker_privileged(tokens: list[str]) -> Finding | None:
-    if not tokens or tokens[0] != "docker":
+    command_name, args = _resolve_wrapped_command(tokens, _DOCKER_COMMANDS)
+    if command_name not in _DOCKER_COMMANDS:
         return None
-    if any(t == "--privileged" or t.startswith("--privileged=") for t in tokens[1:]):
+    if any(t == "--privileged" or t.startswith("--privileged=") for t in args):
         return Finding("DOCKER_PRIVILEGED", "docker command requests privileged mode")
     return None
 
@@ -287,39 +326,9 @@ _READ_STYLE_COMMANDS = frozenset(
     }
 )
 
-_COMMAND_WRAPPERS = frozenset({"sudo", "env"})
-_ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-
-
-def _resolve_command_head(tokens: list[str]) -> tuple[str, list[str]]:
-    """Skip a leading sudo/env wrapper and KEY=VALUE assignments, then
-    resolve the actual command to its basename (so /bin/cat and cat are
-    treated the same)."""
-    idx = 0
-    saw_wrapper = False
-    while idx < len(tokens) and (
-        tokens[idx] in _COMMAND_WRAPPERS or _ENV_ASSIGNMENT_RE.match(tokens[idx])
-    ):
-        saw_wrapper = True
-        idx += 1
-    if saw_wrapper:
-        # sudo/env can take their own flags (and flag values) before the
-        # real command, e.g. "sudo -u root cat .env", "env -i cat .env".
-        # Once a wrapper is seen, keep scanning for a recognized read-style
-        # command instead of assuming the very next token is it.
-        while (
-            idx < len(tokens)
-            and tokens[idx].rsplit("/", 1)[-1] not in _READ_STYLE_COMMANDS
-        ):
-            idx += 1
-    if idx >= len(tokens):
-        return "", []
-    head = tokens[idx].rsplit("/", 1)[-1]
-    return head, tokens[idx + 1 :]
-
 
 def _check_read_style_secret_access(tokens: list[str]) -> Finding | None:
-    command_name, args = _resolve_command_head(tokens)
+    command_name, args = _resolve_wrapped_command(tokens, _READ_STYLE_COMMANDS)
     if command_name not in _READ_STYLE_COMMANDS:
         return None
     for arg in args:

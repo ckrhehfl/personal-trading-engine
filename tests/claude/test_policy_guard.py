@@ -594,6 +594,21 @@ class ReadDispatchCases(unittest.TestCase):
         finding = pg.evaluate_bash("grep --include=.env -r password .")
         self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
 
+    def test_bash_sudo_rm_rf_is_blocked(self):
+        finding = pg.evaluate_bash("sudo rm -rf /tmp/some-dir")
+        self.assertEqual(finding.code, "DESTRUCTIVE_RECURSIVE_REMOVE")
+
+    def test_bash_sudo_git_push_main_is_blocked(self):
+        finding = pg.evaluate_bash("sudo git push origin main")
+        self.assertEqual(finding.code, "DIRECT_MAIN_PUSH")
+
+    def test_bash_sudo_docker_privileged_is_blocked(self):
+        finding = pg.evaluate_bash("sudo docker run --privileged ubuntu")
+        self.assertEqual(finding.code, "DOCKER_PRIVILEGED")
+
+    def test_bash_sudo_wrapped_ordinary_git_push_is_safe(self):
+        self.assertIsNone(pg.evaluate_bash("sudo git push origin feature-x"))
+
 
 # --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
