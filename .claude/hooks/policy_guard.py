@@ -2,8 +2,8 @@
 """Deterministic PreToolUse policy guard for personal-trading-engine.
 
 Registered in .claude/settings.json as a PreToolUse hook for the
-Bash|Edit|Write matcher. This is a mechanical, non-AI safety layer that acts
-even when the parent Claude Code session runs with
+Bash|Edit|Write|MultiEdit|NotebookEdit matcher. This is a mechanical, non-AI
+safety layer that acts even when the parent Claude Code session runs with
 --dangerously-skip-permissions -- see docs/claude/CLAUDE_OPERATING_MODEL.md
 §4 for why permission bypass is not itself a safety boundary.
 
@@ -12,13 +12,6 @@ duplicates some coverage already provided by scripts/ci/security_gates.py
 (defense-in-depth across two independent layers: pre-execution here,
 pre-merge there) and does not claim to catch every possible obfuscation of
 a dangerous command.
-
-evaluate_file_change() also understands the MultiEdit/NotebookEdit
-tool_input shapes, but the PreToolUse hook is only *registered* for
-Bash|Edit|Write (see .claude/settings.json) -- so today those two tool
-names are only covered by the path-based permissions.deny rules (secret
-path writes), not by this hook's content inspection (e.g. live-trading-flag
-detection). See docs/claude/PM_HANDOFF.md known limitations.
 
 Standard library only. No third-party dependencies.
 
@@ -132,9 +125,17 @@ _EXEMPT_LIVE_FLAG_SUFFIXES = (
 
 def _is_exempt_live_flag_path(path: str) -> bool:
     normalized = _normalize(path)
+    segments = _segments(normalized)
+    # A ".." segment can make an otherwise-unrelated path (e.g.
+    # "configs/docs/../deployments/canary.yaml", which the OS actually
+    # resolves to "configs/deployments/canary.yaml") superficially contain a
+    # "docs" segment and slip through the exemption below. Never exempt a
+    # path containing "..": fall through to the normal (non-exempt) check.
+    if ".." in segments:
+        return False
     if normalized.endswith(".md"):
         return True
-    if "docs" in _segments(normalized):
+    if "docs" in segments:
         return True
     for suffix in _EXEMPT_LIVE_FLAG_SUFFIXES:
         if normalized == suffix or normalized.endswith("/" + suffix):

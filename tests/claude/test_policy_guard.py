@@ -121,6 +121,20 @@ class PassCases(unittest.TestCase):
         )
         self.assertIsNone(finding)
 
+    def test_08g_dotdot_traversal_cannot_fake_docs_exemption(self):
+        # A path that superficially contains a "docs" segment via ".." should
+        # NOT be treated as exempt -- the OS would actually resolve this to
+        # "configs/deployments/canary.yaml", nowhere near docs/.
+        flag_assignment = "LIVE_TRADING_ENABLED" + "=" + "true"
+        finding = pg.evaluate_file_change(
+            "Write",
+            {
+                "file_path": "configs/docs/../deployments/canary.yaml",
+                "content": flag_assignment,
+            },
+        )
+        self.assertEqual(finding.code, "LIVE_TRADING_ENABLEMENT")
+
     def test_09_test_fixture_live_flag_example(self):
         flag_assignment = "LIVE_TRADING_ENABLED" + "=" + "true"
         finding = pg.evaluate_file_change(

@@ -315,7 +315,7 @@ F.1의 5개 read-only reviewer subagent 각각을 감싸는 5개 manual-only ski
    `defaultMode`, `disableBypassPermissionsMode`는 이 PR에서 설정하지 않는다
    (기존 동작을 완화하거나 확장하지 않고, 오직 deny만 추가한다).
 2. **PreToolUse policy guard hook** (`.claude/hooks/policy_guard.py`,
-   matcher `Bash|Edit|Write`) — permission 패턴만으로 표현하기 어려운 동적
+   matcher `Bash|Edit|Write|MultiEdit|NotebookEdit`) — permission 패턴만으로 표현하기 어려운 동적
    판단(예: compound bash 명령, 파일 내용 검사)을 결정론적으로 수행한다.
 
 두 계층의 역할은 다르다: deny rule은 **정적 패턴**(경로, 정확한 명령 prefix)만
@@ -348,9 +348,6 @@ project 수준 정책이다.
 - `.claude/settings.json`/`.claude/hooks/policy_guard.py` 자체의 무결성은
   아직 `security-gates`가 별도로 고정(freeze)하지 않는다 — 즉 이 파일들이
   후속 PR에서 약화되지 않도록 보장하는 기계적 장치는 아직 없다.
-- PreToolUse hook은 `Bash|Edit|Write`에만 등록된다. `MultiEdit`/`NotebookEdit`
-  tool을 통한 파일 변경은 `permissions.deny`의 경로 기반 규칙(secret path
-  차단)만 적용받고, hook의 내용 검사(live trading flag 탐지)는 적용받지 않는다.
 - `context: fork` + `agent:`가 감싸는 reviewer subagent의 tool 제약을 forked
   실행 컨텍스트에 구조적으로 강제하는지는 실제 라이브 호출로 경험적으로
   검증하지 않았다.

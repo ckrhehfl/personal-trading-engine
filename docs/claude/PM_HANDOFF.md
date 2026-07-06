@@ -116,12 +116,9 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
   후속 PR에서 약화되는 것을 막는 기계적 장치는 아직 없다
 - (PR #5) implementation agent는 여전히 없다 — 새 skill 5개는 모두 read-only
   reviewer의 manual-only wrapper일 뿐이다
-- (PR #5) PreToolUse hook은 `Bash|Edit|Write`에만 등록된다(task spec에 명시된
-  정확한 matcher 값). `policy_guard.py`의 `evaluate_file_change`는 `MultiEdit`/
-  `NotebookEdit` tool_input 형태도 이해하지만, 이 두 tool은 오늘 hook에 의해
-  호출되지 않는다 — `.claude/settings.json`의 경로 기반 `permissions.deny`
-  규칙(secret path 차단)만 이 두 tool에 적용되고, hook의 내용 검사(live
-  trading flag 탐지 등)는 적용되지 않는다
+- (PR #5, CodeRabbit finding 반영) PreToolUse hook matcher는 `Bash|Edit|Write|
+  MultiEdit|NotebookEdit`로 확장되었다 — `MultiEdit`/`NotebookEdit`도 이제
+  hook의 내용 검사(secret path, live trading flag) 대상이다
 - (PR #5) `context: fork` + `agent:` 조합이 감싸는 reviewer subagent의
   `tools: Read, Grep, Glob` 제약을 forked 실행 컨텍스트에 구조적으로
   강제하는지는 실제 라이브 세션에서 별도로 검증되지 않았다 — 문서상 동작

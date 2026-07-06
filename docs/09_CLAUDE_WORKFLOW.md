@@ -158,7 +158,7 @@ hook, `!` shell injection은 사용하지 않는다. 이 저장소는 `.claude/c
 
 같은 PR에서 `.claude/settings.json`에 project 수준 **deny-only permission
 규칙**과 단일 **PreToolUse policy guard hook**(`.claude/hooks/policy_guard.py`,
-표준 라이브러리만 사용)이 추가되었다. 이 hook은 `Bash|Edit|Write` 호출마다
+표준 라이브러리만 사용)이 추가되었다. 이 hook은 `Bash|Edit|Write|MultiEdit|NotebookEdit` 호출마다
 실행되며, secret/private 경로 쓰기, live trading flag 활성화 문자열, 그리고
 일부 위험한 Bash 패턴(main 직접 push, force push, `gh pr merge`, branch
 protection mutation, `rm -rf`, `docker --privileged`, BingX live order
