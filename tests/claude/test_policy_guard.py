@@ -553,6 +553,29 @@ class ReadDispatchCases(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["hookSpecificOutput"]["permissionDecision"], "deny")
 
+    def test_bash_sudo_cat_env_is_blocked(self):
+        finding = pg.evaluate_bash("sudo cat .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_env_prefixed_cat_is_blocked(self):
+        finding = pg.evaluate_bash("LANG=C cat .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_absolute_path_command_is_blocked(self):
+        finding = pg.evaluate_bash("/bin/cat .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_grep_on_secret_path_is_blocked(self):
+        finding = pg.evaluate_bash("grep -r password infra/secrets/token.txt")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_sed_on_secret_path_is_blocked(self):
+        finding = pg.evaluate_bash("sed -n '1p' .env")
+        self.assertEqual(finding.code, "FORBIDDEN_SECRET_PATH_READ")
+
+    def test_bash_sudo_env_wrapped_ordinary_command_is_safe(self):
+        self.assertIsNone(pg.evaluate_bash("sudo cat README.md"))
+
 
 # --------------------------------------------------------------------------
 # broader secret-path detection (case-insensitivity, filename markers,
@@ -651,7 +674,10 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_unknown_tool_name_is_safe(self):
-        result = _run_cli({"tool_name": "Grep", "tool_input": {"pattern": ".env"}})
+        # Grep now has its own evaluate_event branch (added for the
+        # FORBIDDEN_SECRET_PATH_READ fix), so it no longer exercises the
+        # final "unknown tool" fallback -- use a tool name with no dispatch.
+        result = _run_cli({"tool_name": "WebSearch", "tool_input": {"query": ".env"}})
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
 

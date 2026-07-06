@@ -127,12 +127,22 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
   금지되어 있어 세밀한 예외를 둘 수 없었고, live/secret 탐지에서는 과차단이
   누락보다 안전하다는 원칙에 따라 의도적으로 보수적으로 설계했다
 - (PR #5, CodeRabbit finding 3차 반영) `evaluate_bash`가 `cat`/`less`/`more`/
-  `head`/`tail`/`base64`/`xxd`/`od`/`strings`/`hexdump` 같은 read-style 명령의
-  인자를 `check_forbidden_secret_path`로 검사하도록 추가되었고, `Grep` tool도
-  hook matcher와 dispatch에 포함되었다(`tool_input.path`만 검사, 검색
-  패턴/내용은 검사하지 않음). 다만 이 목록에 없는 다른 read 계열 도구(예: 언어
-  런타임을 통한 파일 열람, `dd`, 커스텀 스크립트)는 여전히 커버되지 않는다 —
-  완전한 목록이라고 주장하지 않는다
+  `head`/`tail`/`base64`/`xxd`/`od`/`strings`/`hexdump`/`grep`/`sed`/`awk`/
+  `nl`/`tac` 같은 read-style 명령의 인자를 `check_forbidden_secret_path`로
+  검사하도록 추가되었고, `Grep` tool도 hook matcher와 dispatch에 포함되었다
+  (`tool_input.path`만 검사, 검색 패턴/내용은 검사하지 않음). 다만 이 목록에
+  없는 다른 read 계열 도구(예: 언어 런타임을 통한 파일 열람, `dd`, 커스텀
+  스크립트)는 여전히 커버되지 않는다 — 완전한 목록이라고 주장하지 않는다
+- (PR #5, CodeRabbit finding 4차 반영) `_check_read_style_secret_access`는
+  이제 `sudo`/`env` wrapper와 `KEY=VALUE` 환경변수 접두어를 건너뛰고 명령을
+  절대경로가 아닌 basename으로 정규화한 뒤 판정한다(`sudo cat .env`,
+  `LANG=C cat .env`, `/bin/cat .env` 모두 차단). 이 정규화는 read-style 명령
+  판정에만 적용되며, `_check_git_push`/`_check_rm`/`_check_docker_privileged`
+  등 다른 segment check는 아직 동일한 wrapper-stripping을 적용하지 않는다
+  (예: `sudo rm -rf`는 여전히 정상적으로 감지되지만 — `rm`이 `sudo` 뒤에
+  와도 `_check_rm`은 tokens[0]이 아닌 전체 segment 내 위치를 보지 않으므로
+  실제로는 이 특정 케이스는 감지되지 않는다 — 다른 check에도 동일한
+  wrapper-stripping을 적용하는 것은 후속 개선 후보다)
 - (PR #5) `context: fork` + `agent:` 조합이 감싸는 reviewer subagent의
   `tools: Read, Grep, Glob` 제약을 forked 실행 컨텍스트에 구조적으로
   강제하는지는 실제 라이브 세션에서 별도로 검증되지 않았다 — 문서상 동작

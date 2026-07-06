@@ -281,14 +281,36 @@ def _check_docker_privileged(tokens: list[str]) -> Finding | None:
 
 
 _READ_STYLE_COMMANDS = frozenset(
-    {"cat", "less", "more", "head", "tail", "base64", "xxd", "od", "strings", "hexdump"}
+    {
+        "cat", "less", "more", "head", "tail", "base64", "xxd", "od", "strings",
+        "hexdump", "grep", "sed", "awk", "nl", "tac",
+    }
 )
+
+_COMMAND_WRAPPERS = frozenset({"sudo", "env"})
+_ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def _resolve_command_head(tokens: list[str]) -> tuple[str, list[str]]:
+    """Skip a leading sudo/env wrapper and KEY=VALUE assignments, then
+    resolve the actual command to its basename (so /bin/cat and cat are
+    treated the same)."""
+    idx = 0
+    while idx < len(tokens) and (
+        tokens[idx] in _COMMAND_WRAPPERS or _ENV_ASSIGNMENT_RE.match(tokens[idx])
+    ):
+        idx += 1
+    if idx >= len(tokens):
+        return "", []
+    head = tokens[idx].rsplit("/", 1)[-1]
+    return head, tokens[idx + 1 :]
 
 
 def _check_read_style_secret_access(tokens: list[str]) -> Finding | None:
-    if not tokens or tokens[0] not in _READ_STYLE_COMMANDS:
+    command_name, args = _resolve_command_head(tokens)
+    if command_name not in _READ_STYLE_COMMANDS:
         return None
-    for arg in tokens[1:]:
+    for arg in args:
         if arg.startswith("-"):
             continue
         if check_forbidden_secret_path(arg):
