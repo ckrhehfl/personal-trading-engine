@@ -49,6 +49,7 @@
 | MLOps / train / deploy / rollback | `docs/07_MLOPS_AUTO_TRAIN_DEPLOY_ROLLBACK.md` | `docs/04_...`, `docs/01_...` §7 | MVP 미구현, 구조만 |
 | LLM usage policy | `docs/08_LLM_USAGE_POLICY.md` | `../CLAUDE.md` (LLM Usage Policy 절) | |
 | Claude / dev workflow | `docs/09_CLAUDE_WORKFLOW.md` | `../CLAUDE.md` (Development Workflow 절), `docs/claude/CLAUDE_OPERATING_MODEL.md`, `docs/claude/PM_HANDOFF.md` | PR #3 에서 v4로 갱신. 상세 실행 절차는 `CLAUDE_OPERATING_MODEL.md`(supporting reference), 현재 상태 스냅샷은 `PM_HANDOFF.md`(supporting reference / current snapshot, source of truth 아님) |
+| Project reviewer subagents | `.claude/agents/*.md` (executable definitions) | `docs/09_CLAUDE_WORKFLOW.md` §F.1 (normative workflow), `docs/claude/CLAUDE_OPERATING_MODEL.md` §13 (supporting procedure) | PR #4 에서 구현. 5개 read-only reviewer(`architecture-reviewer`, `java-oms-reviewer`, `python-research-reviewer`, `risk-reviewer`, `test-reviewer`). implementation agent 아님. CodeRabbit/security-gates 대체 아님 |
 | Open questions / risks | `docs/10_OPEN_QUESTIONS_AND_RISKS.md` | `docs/00_MASTER_SUMMARY.md` §10 | |
 | Decision log | `docs/11_DECISION_LOG.md` | — | 확정된 결정의 기준 기록 |
 | Setup (WSL/local) | `docs/LOCAL_SETUP_WSL.md` | `../README_BOOTSTRAP.md` | |
@@ -132,6 +133,9 @@ docs/
     CLAUDE_OPERATING_MODEL.md     # 상세 operating procedure (supporting reference)
     PM_HANDOFF.md                 # 현재 상태 스냅샷 (supporting reference / snapshot)
   archive/                        # (후속 PR) 12_ALL_IN_ONE_SPEC.md 등 이동 대상
+
+.claude/
+  agents/                          # project reviewer subagents (5 files, read-only)
 ```
 
 > 위 구조는 제안이며, 실제 파일 이동/생성은 후속 PR에서 별도로 진행한다.

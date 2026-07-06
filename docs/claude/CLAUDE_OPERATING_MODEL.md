@@ -219,13 +219,57 @@ GitHub App 연동도 이번 범위가 아니다. 지금은 "이런 변경에는 
 - push protection
 - CodeRabbit 리뷰
 - `security-gates` deterministic check
+- project reviewer subagents 5개 (`.claude/agents/*.md`, §13 참고)
 
 **Planned (미구현):**
 
-- project subagents
 - skills / slash commands
 - hooks / permissions
+- implementation agents (구현자 subagent)
 - shared schema skeleton
 - Java/Python 코드 skeleton
 
 최신 상태는 `docs/claude/PM_HANDOFF.md`를 확인한다.
+
+---
+
+## 13. Project reviewer subagents
+
+`.claude/agents/*.md`에 5개의 **read-only reviewer** subagent가 정의되어
+있다. 전부 reviewer/analyst이며 구현자(implementer)가 아니다.
+
+| Agent | 역할 | 주요 risk coverage | 호출 시점 |
+|---|---|---|---|
+| `architecture-reviewer` | architecture/ADR/system-boundary/shared-contract 검토 | R2, 큰 R1, cross-language contract | architecture/ADR/schema contract 변경 시 |
+| `java-oms-reviewer` | Java OMS/상태 머신/실행 lifecycle/reconciliation 검토 | R3 | Java OMS/state lifecycle 변경 시 |
+| `python-research-reviewer` | Python research/backtest 재현성·편향·leakage·live-order boundary 검토 | Python backtest tier | Python research/backtest 변경 시 |
+| `risk-reviewer` | risk/leverage/exposure/loss-limit/kill-switch/live 설정 검토 | R3/R4 boundary, R4 escalation | risk/R4-adjacent 변경 시 |
+| `test-reviewer` | 테스트 충분성·regression 진위·edge case coverage 검토 | R0~R3 지원, domain-independent | 모든 PR의 테스트 검토 시 |
+
+### Tool boundary (모든 agent 공통)
+
+모든 agent의 frontmatter는 정확히 다음을 사용한다:
+
+```yaml
+tools: Read, Grep, Glob
+model: inherit
+```
+
+`Write`, `Edit`, `Bash`, `Agent`(nested agent), `Skill`, 모든 `mcp__*` tool은
+tool pool에 존재하지 않는다. `permissionMode`, `mcpServers`, `hooks` 등의
+field도 사용하지 않는다 — 이 field들을 아예 쓰지 않음으로써, parent session이
+`--dangerously-skip-permissions`로 실행되더라도 이 agent들의 capability
+surface는 영향을 받지 않는다.
+
+이것이 "절대적인 sandbox"라는 뜻은 아니다. 단지 **사용 가능한 tool 표면
+자체를 의도적으로 read-only 3종(`Read`, `Grep`, `Glob`)으로 최소화**했다는
+뜻이며, 이 최소화가 permission mode와 무관하게 유지된다는 뜻이다.
+
+### 위임 원칙
+
+- 이 5개 agent는 **reviewer/analyst**이며 최종 merge authority가 아니다.
+- CodeRabbit/`security-gates`를 대체하지 않는다 — 병행 층이다.
+- open decision(`docs/00_INDEX.md` §6)을 확정하지 않는다. 확정이 필요하면
+  `DECISION_REQUIRED`로 보고한다.
+- R4 인접 변경은 기본적으로 `BLOCKED` 또는 `DECISION_REQUIRED`로 취급한다.
+- 구체적인 delegation table은 `docs/09_CLAUDE_WORKFLOW.md` §F.1을 본다.
