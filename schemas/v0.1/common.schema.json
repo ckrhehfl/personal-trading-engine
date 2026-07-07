@@ -23,13 +23,15 @@
     },
     "positiveDecimal": {
       "type": "string",
+      "maxLength": 64,
       "pattern": "^(?:0\\.(?:0*[1-9]\\d*)|[1-9]\\d*(?:\\.\\d+)?)$",
       "description": "Positive base-10 decimal encoded as a string to avoid binary-float drift across languages."
     },
     "epochMillis": {
       "type": "integer",
       "minimum": 0,
-      "description": "UTC Unix epoch timestamp in milliseconds."
+      "maximum": 9223372036854775807,
+      "description": "UTC Unix epoch timestamp in milliseconds bounded to a signed 64-bit integer."
     }
   }
 }
