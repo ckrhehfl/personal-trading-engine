@@ -232,6 +232,72 @@ class BlockCases(unittest.TestCase):
         )
         self.assertEqual(finding.code, "LIVE_TRADING_ENABLEMENT")
 
+    def test_20b_live_trading_enabled_numeric_one(self):
+        flag_assignment = "LIVE_TRADING_ENABLED" + "=" + "1"
+        finding = pg.evaluate_file_change(
+            "Edit",
+            {
+                "file_path": "configs/deployments/canary.yaml",
+                "new_string": flag_assignment,
+            },
+        )
+        self.assertEqual(finding.code, "LIVE_TRADING_ENABLEMENT")
+
+    def test_20c_live_trading_yes(self):
+        flag_assignment = "live" + "_trading" + ":" + " yes"
+        finding = pg.evaluate_file_change(
+            "Write",
+            {
+                "file_path": "configs/deployments/canary.yaml",
+                "content": flag_assignment,
+            },
+        )
+        self.assertEqual(finding.code, "LIVE_TRADING_ENABLEMENT")
+
+    def test_20d_live_trading_enabled_on_uppercase(self):
+        flag_assignment = "LIVE_TRADING_ENABLED" + "=" + "ON"
+        finding = pg.evaluate_file_change(
+            "Edit",
+            {
+                "file_path": "configs/deployments/canary.yaml",
+                "new_string": flag_assignment,
+            },
+        )
+        self.assertEqual(finding.code, "LIVE_TRADING_ENABLEMENT")
+
+    def test_20e_live_trading_enabled_zero_is_safe(self):
+        flag_assignment = "LIVE_TRADING_ENABLED" + "=" + "0"
+        finding = pg.evaluate_file_change(
+            "Edit",
+            {
+                "file_path": "configs/deployments/canary.yaml",
+                "new_string": flag_assignment,
+            },
+        )
+        self.assertIsNone(finding)
+
+    def test_20f_live_trading_no_is_safe(self):
+        flag_assignment = "live" + "_trading" + ":" + " no"
+        finding = pg.evaluate_file_change(
+            "Write",
+            {
+                "file_path": "configs/deployments/canary.yaml",
+                "content": flag_assignment,
+            },
+        )
+        self.assertIsNone(finding)
+
+    def test_20g_live_trading_off_is_safe(self):
+        flag_assignment = "live" + "_trading" + ":" + " off"
+        finding = pg.evaluate_file_change(
+            "Write",
+            {
+                "file_path": "configs/deployments/canary.yaml",
+                "content": flag_assignment,
+            },
+        )
+        self.assertIsNone(finding)
+
     def test_21_curl_pipe_sh(self):
         # Pipe char built at runtime -- see test_08 comment on why.
         curl_cmd = "curl -sSL https://example.com/install.sh"

@@ -104,11 +104,19 @@ def check_forbidden_secret_path(path: str) -> bool:
 # 9B - live trading enablement (Edit new_string / Write content)
 # --------------------------------------------------------------------------
 
+# Common operational truthy representations -- not just the literal "true".
+# Intentionally conservative: a future parser treating some of these quoted
+# forms as plain strings is not a reason to narrow this, since an over-block
+# here is safe while a missed live-enablement path is not. Only the value
+# alternation is case-varied here (not wrapped in re.IGNORECASE), so the key
+# names below keep their original case-sensitivity -- this stays a narrow
+# value-format fix rather than an incidental key-matching behavior change.
+_TRUTHY_VALUE = r"(?:true|True|TRUE|1|yes|Yes|YES|on|On|ON)"
 _LIVE_TRADING_ENABLED_RE = re.compile(
-    r"\bLIVE_TRADING_ENABLED\b\s*[:=]\s*[\"']?(true|True|TRUE)[\"']?\b"
+    r"\bLIVE_TRADING_ENABLED\b\s*[:=]\s*[\"']?" + _TRUTHY_VALUE + r"[\"']?\b"
 )
 _LIVE_TRADING_LOWER_RE = re.compile(
-    r"\blive_trading\b\s*[:=]\s*[\"']?(true|True|TRUE)[\"']?\b"
+    r"\blive_trading\b\s*[:=]\s*[\"']?" + _TRUTHY_VALUE + r"[\"']?\b"
 )
 
 # These paths intentionally contain the literal enablement strings as policy
