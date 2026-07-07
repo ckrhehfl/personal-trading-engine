@@ -43,9 +43,16 @@ Candidate 3는 시작하지 않았다.
 - `.github/workflows/security-gates.yml`에 Gradle wrapper 검증
   (`gradle/actions/wrapper-validation`) + Java 21 setup + `./gradlew test`
   실행 단계 추가 (기존 `security-gates` job 확장, 새 required check 아님)
-- `java-oms-reviewer` / `architecture-reviewer` / `test-reviewer` 실행 완료
-  (모두 PASS; test-reviewer가 최초 CHANGES_NEEDED로 지적한 4개 illegal-transition
-  테스트 누락은 수정 후 재실행하여 반영함)
+- `java/gradlew`의 tracked git file mode를 100644 → 100755로 수정
+  (`core.filemode=false`인 이 checkout에서는 `chmod +x`만으로는 git에 반영되지
+  않아 `git update-index --chmod=+x`로 강제함). 최초 CI 실행은 이 mode 문제로
+  `Permission denied`(exit 126)로 실패했고 CodeRabbit도 동일 원인을 Critical로
+  지적함 — 커밋 `ee52556`에서 수정, fresh clone에서 `./gradlew test` 직접 실행
+  확인함.
+- `java-oms-reviewer` / `architecture-reviewer` / `test-reviewer` 실행 완료,
+  모두 최종 PASS. test-reviewer는 최초 CHANGES_NEEDED(4개 illegal-transition
+  테스트 누락)를 지적했고, 수정 후 **재실행하여 최종 PASS를 실제로 확인함**
+  (재실행 없이 PASS로 표기했던 이전 스냅샷의 부정확한 서술을 이 항목에서 정정함).
 
 Candidate 2는 Risk Gateway, exchange/network, persistence, 실거래 관련 코드를
 포함하지 않는다. `docs/06_VALIDATION_POLICY.md` §5의 stale order 처리,
