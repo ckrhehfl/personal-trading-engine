@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "0.1.0",
+  "decisionId": "decision-004",
+  "intentId": "intent-004",
+  "outcome": "PASS",
+  "reasonCodes": ["UNEXPECTED_REASON"],
+  "evaluatedAtEpochMs": 1783396800103
+}
