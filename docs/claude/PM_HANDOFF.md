@@ -21,9 +21,12 @@
 
 ### Current candidate
 
-Candidate 1 / Issue #6 — shared contract baseline.
+Candidate 1 / Issue #7 — shared contract baseline. 구현은 PR #6.
 
-현재 branch에 다음이 구현되어 있다:
+**상태:** PR #6 open, pending merge. `main`에는 아직 merge되지 않았다. Candidate 2
+(Java OMS state-machine skeleton)는 시작하지 않았다.
+
+현재 branch(`worktree-shared-contract-baseline`)에 다음이 구현되어 있다:
 
 - D011 — MVP v0.1 공유 계약은 JSON Schema Draft 2020-12 사용
 - `schemas/v0.1/common.schema.json`
