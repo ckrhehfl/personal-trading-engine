@@ -1,6 +1,6 @@
 # DECISION_LOG.md
 
-# 의사결정 로그 v3
+# 의사결정 로그 v4
 
 ---
 
@@ -10,7 +10,7 @@ BingX를 초기 거래소로 선택한다.
 
 이유:
 
-- 사용자가 데모/실거래 검증에 BingX를 사용할 계획
+- 사용자가 데모와 운영 검증에 BingX를 사용할 계획
 - BTC/USDT 선물 시작 가능
 
 ---
@@ -33,7 +33,7 @@ Long/Short 모두 허용한다.
 
 레버리지는 지원한다.
 
-하지만 canary live에서는 최대 2x, stable live에서도 최대 3x를 기본 hard limit으로 한다.
+하지만 canary 단계에서는 최대 2x, stable 단계에서도 최대 3x를 기본 hard limit으로 한다.
 
 ---
 
@@ -82,7 +82,7 @@ Java:
 - Freqtrade: 구조 참고 또는 빠른 비교용
 - LEAN: 기관식 구조 참고용
 - CCXT: market data / API adapter 검증용
-- BingX native API: live path 최종 기준
+- BingX native API: 최종 adapter 기준
 
 ---
 
@@ -99,3 +99,14 @@ Java:
 LLM은 실시간 매매 판단자가 아니다.
 
 연구, 운영, 리스크, 장애 분석 보조로 사용한다.
+
+---
+
+## D011: Python↔Java 공유 계약 형식
+
+MVP v0.1의 Python↔Java 공유 계약은 JSON Schema Draft 2020-12를 사용한다.
+
+- canonical contract는 `schemas/v0.1/*.schema.json`이다.
+- versioning과 validation 규칙은 `schemas/README.md`가 보조한다.
+- Protobuf는 영구 배제하지 않지만 현재 도입하지 않는다.
+- 성능, interoperability, schema evolution, code generation에서 측정 가능한 필요가 생길 때만 재검토한다.

@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "0.1.0",
+  "decisionId": "decision-002",
+  "intentId": "intent-002",
+  "outcome": "BLOCK",
+  "reasonCodes": ["KILL_SWITCH_ACTIVE"],
+  "evaluatedAtEpochMs": 1783396800101
+}

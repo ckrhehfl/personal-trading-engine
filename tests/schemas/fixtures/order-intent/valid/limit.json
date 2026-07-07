@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "0.1.0",
+  "intentId": "intent-001",
+  "strategyId": "strategy-smoke",
+  "instrument": "BTC-USDT-PERP",
+  "intentType": "ENTER",
+  "direction": "LONG",
+  "orderType": "LIMIT",
+  "requestedNotional": "100.00",
+  "limitPrice": "60000.50",
+  "createdAtEpochMs": 1783396800000
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "0.1.0",
+  "intentId": "intent-005",
+  "strategyId": "strategy-smoke",
+  "instrument": "BTC-USDT-PERP",
+  "intentType": "ENTER",
+  "direction": "SHORT",
+  "orderType": "MARKET",
+  "requestedNotional": "10",
+  "createdAtEpochMs": 1783396800004,
+  "unexpectedField": "must-not-exist"
+}

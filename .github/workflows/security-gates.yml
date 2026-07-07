@@ -34,3 +34,16 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python3 scripts/ci/security_gates.py --base "$BASE_SHA" --head "$HEAD_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install shared schema validation dependencies
+        run: |
+          python -m pip install --require-hashes -r requirements/schema-validation.txt
+
+      - name: Run shared schema contract tests
+        run: |
+          python -m unittest tests/schemas/test_schema_contracts.py -v
