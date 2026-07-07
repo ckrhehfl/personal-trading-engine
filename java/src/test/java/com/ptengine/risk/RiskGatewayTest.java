@@ -167,6 +167,21 @@ class RiskGatewayTest {
     }
 
     @Test
+    void ruleAfterANullReturningRuleIsNotEvaluated() {
+        List<Boolean> laterRuleWasCalled = new ArrayList<>();
+        RiskRule laterRule = intent -> {
+            laterRuleWasCalled.add(true);
+            return Optional.of(RiskRejectReason.RISK_STATE_DEGRADED);
+        };
+        RiskGateway gateway = new RiskGateway(List.of(alwaysReturnNull(), laterRule));
+
+        RiskDecision decision = gateway.evaluate(INTENT, METADATA);
+
+        assertEquals(List.of("RISK_ENGINE_ERROR"), decision.reasonCodes());
+        assertTrue(laterRuleWasCalled.isEmpty(), "rule after a null-returning rule must not be evaluated");
+    }
+
+    @Test
     void nullRulesListRejected() {
         assertThrows(NullPointerException.class, () -> new RiskGateway(null));
     }
