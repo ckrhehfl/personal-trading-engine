@@ -33,9 +33,9 @@
 
 ### Current candidate
 
-Candidate 3 / Issue #10 — Java Risk Gateway skeleton.
+Candidate 3 / Issue #10 — Java Risk Gateway skeleton. 구현은 PR #11.
 
-**상태:** 구현 완료, PR 생성 대기/진행 중. `main`에는 아직 merge되지 않았다.
+**상태:** PR #11 open, pending merge. `main`에는 아직 merge되지 않았다.
 Candidate 4는 시작하지 않았다.
 
 현재 branch(`worktree-java-risk-gateway-skeleton`, base `bc48d17`)에 다음이
