@@ -13,6 +13,27 @@ import java.util.Objects;
  * public state setter and no other mutation path. An illegal transition
  * throws {@link IllegalOrderTransitionException} and leaves the state
  * unchanged.
+ *
+ * <h2>Thread-safety contract</h2>
+ *
+ * <p><b>This class is not thread-safe.</b> {@code state} is a plain mutable
+ * field read and written without synchronization, and {@link
+ * #transitionTo(OrderState)} is a check-then-act operation. A single {@code
+ * Order} instance must be owned and mutated by exactly one thread, or by a
+ * single serialized execution context (e.g. one actor, one single-threaded
+ * executor), for its entire lifetime. Concurrent invocation of the
+ * transition methods ({@link #accept()}, {@link #reject()}, {@link
+ * #partiallyFill()}, {@link #fill()}, {@link #cancel()}) on the same
+ * instance from more than one thread is unsupported and can corrupt state:
+ * two racing transitions may both pass the legality check before either
+ * writes, silently dropping one transition.
+ *
+ * <p>This is a deliberate scope boundary for the Candidate 2 domain
+ * skeleton, not an oversight. {@link OrderRegistry} is likewise a plain,
+ * non-thread-safe map. Synchronization, atomics, locks, event-dispatch
+ * ordering, and any other cross-thread lifecycle coordination are out of
+ * scope here and deferred to a later runtime/concurrency task. Callers must
+ * not invoke transition methods on the same {@code Order} concurrently.
  */
 public final class Order {
 
