@@ -88,4 +88,21 @@ class RiskDecisionTest {
                 InvalidRiskDecisionException.class,
                 () -> new RiskDecision("0.2.0", "decision-1", "intent-1", RiskOutcome.PASS, List.of(), 1_000L));
     }
+
+    @Test
+    void nullOutcomeRejected() {
+        assertThrows(InvalidRiskDecisionException.class, () -> decision(null, List.of()));
+    }
+
+    @Test
+    void nullReasonCodesRejected() {
+        assertThrows(InvalidRiskDecisionException.class, () -> decision(RiskOutcome.BLOCK, null));
+    }
+
+    @Test
+    void unknownReasonCodeRejected() {
+        assertThrows(
+                InvalidRiskDecisionException.class,
+                () -> decision(RiskOutcome.BLOCK, List.of("NOT_A_REAL_REASON")));
+    }
 }

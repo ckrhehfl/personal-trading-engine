@@ -16,16 +16,16 @@ class RiskDecisionMetadataTest {
 
     @Test
     void blankDecisionIdRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new RiskDecisionMetadata("  ", 1_000L));
+        assertThrows(InvalidRiskDecisionException.class, () -> new RiskDecisionMetadata("  ", 1_000L));
     }
 
     @Test
     void nullDecisionIdRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new RiskDecisionMetadata(null, 1_000L));
+        assertThrows(InvalidRiskDecisionException.class, () -> new RiskDecisionMetadata(null, 1_000L));
     }
 
     @Test
     void negativeTimestampRejected() {
-        assertThrows(IllegalArgumentException.class, () -> new RiskDecisionMetadata("decision-1", -1L));
+        assertThrows(InvalidRiskDecisionException.class, () -> new RiskDecisionMetadata("decision-1", -1L));
     }
 }

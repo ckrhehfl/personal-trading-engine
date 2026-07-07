@@ -2,7 +2,6 @@ package com.ptengine.risk;
 
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Typed Java domain representation of {@code RiskDecision}, field-for-field
@@ -35,13 +34,25 @@ public record RiskDecision(
         }
         requireNonBlank(decisionId, "decisionId");
         requireNonBlank(intentId, "intentId");
-        Objects.requireNonNull(outcome, "outcome");
+        if (outcome == null) {
+            throw new InvalidRiskDecisionException("outcome must not be null");
+        }
         if (evaluatedAtEpochMs < 0) {
             throw new InvalidRiskDecisionException(
                     "evaluatedAtEpochMs must be non-negative, was: " + evaluatedAtEpochMs);
         }
-        Objects.requireNonNull(reasonCodes, "reasonCodes");
+        if (reasonCodes == null) {
+            throw new InvalidRiskDecisionException("reasonCodes must not be null");
+        }
         reasonCodes = List.copyOf(new LinkedHashSet<>(reasonCodes));
+
+        for (String code : reasonCodes) {
+            try {
+                RiskRejectReason.valueOf(code);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidRiskDecisionException("Unknown reasonCode: " + code);
+            }
+        }
 
         if (outcome == RiskOutcome.PASS && !reasonCodes.isEmpty()) {
             throw new InvalidRiskDecisionException("PASS must have zero reasonCodes, had: " + reasonCodes);

@@ -14,10 +14,11 @@ public record RiskDecisionMetadata(String decisionId, long evaluatedAtEpochMs) {
 
     public RiskDecisionMetadata {
         if (decisionId == null || decisionId.isBlank()) {
-            throw new IllegalArgumentException("decisionId must not be blank");
+            throw new InvalidRiskDecisionException("decisionId must not be blank");
         }
         if (evaluatedAtEpochMs < 0) {
-            throw new IllegalArgumentException("evaluatedAtEpochMs must be non-negative, was: " + evaluatedAtEpochMs);
+            throw new InvalidRiskDecisionException(
+                    "evaluatedAtEpochMs must be non-negative, was: " + evaluatedAtEpochMs);
         }
     }
 }
