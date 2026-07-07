@@ -44,15 +44,17 @@ public record RiskDecision(
         if (reasonCodes == null) {
             throw new InvalidRiskDecisionException("reasonCodes must not be null");
         }
-        reasonCodes = List.copyOf(new LinkedHashSet<>(reasonCodes));
-
         for (String code : reasonCodes) {
+            if (code == null) {
+                throw new InvalidRiskDecisionException("reasonCodes must not contain a null element");
+            }
             try {
                 RiskRejectReason.valueOf(code);
             } catch (IllegalArgumentException e) {
                 throw new InvalidRiskDecisionException("Unknown reasonCode: " + code);
             }
         }
+        reasonCodes = List.copyOf(new LinkedHashSet<>(reasonCodes));
 
         if (outcome == RiskOutcome.PASS && !reasonCodes.isEmpty()) {
             throw new InvalidRiskDecisionException("PASS must have zero reasonCodes, had: " + reasonCodes);

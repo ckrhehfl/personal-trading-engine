@@ -105,4 +105,12 @@ class RiskDecisionTest {
                 InvalidRiskDecisionException.class,
                 () -> decision(RiskOutcome.BLOCK, List.of("NOT_A_REAL_REASON")));
     }
+
+    @Test
+    void nullElementInReasonCodesRejected() {
+        List<String> withNullElement = new ArrayList<>();
+        withNullElement.add("RISK_ENGINE_ERROR");
+        withNullElement.add(null);
+        assertThrows(InvalidRiskDecisionException.class, () -> decision(RiskOutcome.BLOCK, withNullElement));
+    }
 }
