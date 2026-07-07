@@ -100,6 +100,13 @@ class SharedSchemaContractTests(unittest.TestCase):
             with self.subTest(fixture=relative):
                 self.assertIn(EXPECTED_INVALID_KEYWORDS[relative], validators)
 
+    def test_epoch_millis_rejects_signed_64_bit_overflow(self) -> None:
+        fixture_path = FIXTURE_DIR / "order-intent" / "valid" / "market.json"
+        instance = load_json(fixture_path)
+        instance["createdAtEpochMs"] = 2**63
+        errors = list(self.validator_for("order-intent").iter_errors(instance))
+        self.assertIn("maximum", {error.validator for error in errors})
+
 
 if __name__ == "__main__":
     unittest.main()
