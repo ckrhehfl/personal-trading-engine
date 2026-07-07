@@ -21,8 +21,8 @@ EXPECTED_INVALID_KEYWORDS = {
     "order-intent/invalid/limit-missing-price.json": "required",
     "order-intent/invalid/market-with-limit-price.json": "not",
     "order-intent/invalid/unknown-field.json": "additionalProperties",
-    "risk-decision/invalid/rejected-without-reason.json": "minItems",
-    "risk-decision/invalid/approved-with-reason.json": "maxItems",
+    "risk-decision/invalid/block-without-reason.json": "minItems",
+    "risk-decision/invalid/pass-with-reason.json": "maxItems",
 }
 
 
