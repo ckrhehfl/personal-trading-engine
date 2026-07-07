@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "0.1.0",
+  "decisionId": "decision-003",
+  "intentId": "intent-003",
+  "outcome": "BLOCK",
+  "reasonCodes": [],
+  "evaluatedAtEpochMs": 1783396800102
+}
