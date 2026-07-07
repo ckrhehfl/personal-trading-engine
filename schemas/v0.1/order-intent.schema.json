@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pte:schema:v0.1:order-intent",
+  "title": "OrderIntent v0.1",
+  "description": "Research-plane order candidate consumed by the Java trading plane. This contract does not authorize exchange execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "intentId",
+    "strategyId",
+    "instrument",
+    "intentType",
+    "direction",
+    "orderType",
+    "requestedNotional",
+    "createdAtEpochMs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/schemaVersion"
+    },
+    "intentId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "strategyId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "instrument": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/instrument"
+    },
+    "intentType": {
+      "type": "string",
+      "enum": [
+        "ENTER",
+        "EXIT"
+      ],
+      "description": "Position lifecycle intent; does not decide hedge vs one-way position mode."
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "LONG",
+        "SHORT"
+      ]
+    },
+    "orderType": {
+      "type": "string",
+      "enum": [
+        "LIMIT",
+        "MARKET"
+      ]
+    },
+    "requestedNotional": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/positiveDecimal"
+    },
+    "limitPrice": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/positiveDecimal"
+    },
+    "createdAtEpochMs": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/epochMillis"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "orderType": {
+            "const": "LIMIT"
+          }
+        },
+        "required": [
+          "orderType"
+        ]
+      },
+      "then": {
+        "required": [
+          "limitPrice"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "orderType": {
+            "const": "MARKET"
+          }
+        },
+        "required": [
+          "orderType"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "limitPrice"
+          ]
+        }
+      }
+    }
+  ]
+}
