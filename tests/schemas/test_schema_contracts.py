@@ -108,7 +108,7 @@ class SharedSchemaContractTests(unittest.TestCase):
         instance = load_json(fixture_path)
         instance["createdAtEpochMs"] = 2**63
         errors = list(self.validator_for("order-intent").iter_errors(instance))
-        self.assertIn("maximum", {error.validator for error in errors})
+        self.assertEqual({error.validator for error in errors}, {"maximum"})
 
 
 if __name__ == "__main__":
