@@ -1,9 +1,9 @@
 # PM Handoff
 
 **Status:** supporting reference / current snapshot (living document, not source of truth)
-**Last verified base main SHA:** `717c2490b260b05d56d25e4c44cb812867499956`
+**Last verified base main SHA:** `d685426d63a9ae4b52eb1ccf362e79b7090365f0`
 **Repository visibility:** public
-**Current phase:** architecture / governance / CI / Claude reviewer-agent foundation (no product code yet)
+**Current phase:** architecture / governance / CI / Claude reviewer-agent + skill/guardrail foundation (no product code yet)
 
 > **Source-of-truth warning:** 이 문서는 "지금 상태가 무엇인지" 요약하는
 > 스냅샷이다. 제품/리스크/아키텍처 결정을 여기서 새로 확정하지 않는다. 값이
@@ -28,6 +28,12 @@
   `java-oms-reviewer`, `python-research-reviewer`, `risk-reviewer`,
   `test-reviewer`), 전부 `.claude/agents/*.md`, read-only
   (`tools: Read, Grep, Glob`)
+- PR #5 — project skills 5개(`.claude/skills/review-*/SKILL.md`, PR #4의
+  reviewer subagent 5개를 감싸는 manual-only wrapper, `disable-model-invocation:
+  true` + `context: fork`), project 수준 deny-only permission rule과
+  PreToolUse policy guard hook(`.claude/settings.json`,
+  `.claude/hooks/policy_guard.py`, 표준 라이브러리만 사용), 지원 테스트
+  (`tests/claude/test_policy_guard.py`)
 
 **현재 required checks** (GitHub API 실측, `branches/main/protection`):
 
@@ -100,8 +106,64 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 - 언제 어떤 reviewer subagent를 호출해야 하는지에 대한 자동 강제(enforcement)가
   없다 — `docs/09_CLAUDE_WORKFLOW.md` §F.1 delegation table은 가이드일 뿐,
   자동으로 강제되지 않는다
-- skills / slash commands / hooks / permissions 미구현
 - second AI reviewer 자동화 미구현(문서상 요구사항만 존재)
+- (PR #5) `.claude/hooks/policy_guard.py`는 high-confidence pattern matcher이며
+  완전한 shell parser가 아니다 — 의도적으로 난독화된 명령은 통과할 수 있다
+- (PR #5) 간접 subprocess 호출이나 hook이 보지 못하는 경로를 통한 파일 접근은
+  model-level 규칙(deny rule/hook)을 우회할 수 있다
+- (PR #5) `.claude/settings.json`/`.claude/hooks/policy_guard.py` 자체의
+  무결성은 아직 `security-gates`가 별도로 고정(freeze)하지 않는다 — 이 파일들이
+  후속 PR에서 약화되는 것을 막는 기계적 장치는 아직 없다
+- (PR #5) implementation agent는 여전히 없다 — 새 skill 5개는 모두 read-only
+  reviewer의 manual-only wrapper일 뿐이다
+- (PR #5, CodeRabbit finding 반영) PreToolUse hook matcher는
+  `Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Grep`로 확장되었다 —
+  `MultiEdit`/`NotebookEdit`도 hook의 내용 검사(secret path, live trading
+  flag) 대상이 되었고, `Read`도 secret path 열람 차단 대상이 되었다(CodeRabbit
+  Critical finding: `.env.local`/`.env.production`/`id_rsa`/`id_ed25519`/
+  `*.kdbx` 등이 Read 경로에서 빠져 있던 문제)
+- (PR #5) `.claude/settings.json`의 `Read(.env.*)` deny 규칙은 `.env.example`
+  읽기도 함께 차단한다 — `permissions.allow` 예외 규칙 추가가 이 PR에서
+  금지되어 있어 세밀한 예외를 둘 수 없었고, live/secret 탐지에서는 과차단이
+  누락보다 안전하다는 원칙에 따라 의도적으로 보수적으로 설계했다
+- (PR #5, CodeRabbit finding 3차 반영) `evaluate_bash`가 `cat`/`less`/`more`/
+  `head`/`tail`/`base64`/`xxd`/`od`/`strings`/`hexdump`/`grep`/`sed`/`awk`/
+  `nl`/`tac` 같은 read-style 명령의 인자를 `check_forbidden_secret_path`로
+  검사하도록 추가되었고, `Grep` tool도 hook matcher와 dispatch에 포함되었다
+  (`tool_input.path`만 검사, 검색 패턴/내용은 검사하지 않음). 다만 이 목록에
+  없는 다른 read 계열 도구(예: 언어 런타임을 통한 파일 열람, `dd`, 커스텀
+  스크립트)는 여전히 커버되지 않는다 — 완전한 목록이라고 주장하지 않는다
+- (PR #5, CodeRabbit finding 4차/5차/6차/7차 반영) `_resolve_wrapped_command`
+  (구 `_resolve_command_head`를 일반화)는 `sudo`/`env` wrapper(플래그 포함,
+  예: `sudo -u root cat .env`, `env -i cat .env`)와 `KEY=VALUE` 환경변수
+  접두어를 건너뛰고 명령을 절대경로가 아닌 basename으로 정규화한 뒤 판정한다.
+  `--include=.env`처럼 값이 `=` 뒤에 병합된 플래그도 그 값을 검사한다. 이
+  정규화는 `_check_read_style_secret_access`/`_check_git_push`/`_check_rm`/
+  `_check_docker_privileged`에 이어 `_check_gh_pr_merge`/`_check_gh_repo_edit`/
+  `_check_gh_api_branch_protection`(gh 계열, PR #5 latest review에서 지적된
+  gap)에도 적용되어 `sudo rm -rf`, `sudo git push origin main`,
+  `sudo docker --privileged`, `sudo gh pr merge`, `sudo gh repo edit
+  --visibility`, `sudo gh api -X DELETE .../protection` 같은 `sudo`/`env`
+  wrapper 형태의 흔한 우회가 모두 차단된다. 다만 여전히 완전한 shell
+  parser가 아니다 — 임의의 obfuscation(예: 커스텀 wrapper 스크립트, 간접
+  subprocess 호출, `sudo`/`env` 외의 다른 wrapper 명령)까지 보장하지는
+  않으며, 이를 완전한 방어라고 주장하지 않는다.
+- (PR #5) `context: fork` + `agent:` 조합이 감싸는 reviewer subagent의
+  `tools: Read, Grep, Glob` 제약을 forked 실행 컨텍스트에 구조적으로
+  강제하는지는 실제 라이브 세션에서 별도로 검증되지 않았다 — 문서상 동작
+  방식으로는 그렇게 되어야 하지만, 이 PR에서 실제 `/review-*` 호출로
+  경험적으로 확인하지는 않았다
+- (PR #5) hook timeout(5초) 또는 `python3` spawn 실패 시 Claude Code
+  harness가 fail-open(도구 진행 허용)으로 처리하는지 fail-closed(차단)로
+  처리하는지 이 PR에서 직접 확인하지 못했다 — harness 레벨 동작이며
+  `policy_guard.py` 자체의 범위 밖이다
+- (PR #5) `git push` 앞에 global option이 오는 경우(예: `git -C path push
+  origin main`)는 hook의 `_check_git_push`가 인식하지 못한다. main 직접
+  push는 GitHub branch protection(서버 측)이 최종적으로 막는다
+- (PR #5) `.claude/settings.json`의 정적 deny 규칙 중 main 직접 push
+  항목은 `origin` remote 이름에 고정되어 있다(다른 remote 이름을 쓰면 정적
+  규칙은 매치하지 않음). hook 쪽의 `_check_git_push`는 remote 이름과 무관하게
+  동작하므로 이 부분은 hook이 보완한다
 
 ---
 
@@ -128,9 +190,9 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 번호는 논리적 순서이며 실제 GitHub PR 번호를 미리 단정하지 않는다.
 
 1. Claude operating model / PM handoff (완료, PR #3)
-2. (이번 PR) Project reviewer subagents
-3. Skills / slash commands / hooks / permissions
-4. Shared schema skeleton
+2. Project reviewer subagents (완료, PR #4)
+3. Project skills / permission deny rules / PreToolUse policy hook (완료, PR #5)
+4. (다음 작업) Shared schema skeleton
 5. Java OMS state machine skeleton
 6. Java Risk Gateway skeleton
 7. Python deterministic backtest skeleton
@@ -139,26 +201,33 @@ review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)을
 
 ---
 
-## 7. Next task packet (Skills / slash commands / hooks / permissions)
+## 7. Next task packet (Shared schema skeleton)
 
-이번 PR(#4)에서 project reviewer subagent 5개는 이미 구현되었다
-(`.claude/agents/*.md`, §1 참고). 다음 작업을 위한 준비된 task packet이며,
-**이번 PR에서 구현하지 않는다**:
+이번 PR(#5)에서 project skills 5개, project 수준 deny permission rule,
+PreToolUse policy guard hook이 이미 구현되었다(§1 참고). 다음 작업을 위한
+준비된 task packet이며, **이번 PR에서 구현하지 않는다**:
 
-- **Goal:** skills/slash command, hooks, permissions 설계를 검토하고 필요한
-  최소 범위만 구현한다.
-- **In scope:** 설계 검토, 최소 skill/slash command 후보 선정, hooks/permissions
-  필요성 평가.
-- **Out of scope:** implementation agent(구현자 subagent), 실제 제품 코드,
-  shared schema.
-- **Source docs:** `docs/09_CLAUDE_WORKFLOW.md`, `docs/claude/CLAUDE_OPERATING_MODEL.md`,
-  `docs/00_INDEX.md`, `docs/11_DECISION_LOG.md`, 이 문서.
-- **Risk class:** R1 (repo/tooling/governance).
+- **Goal:** Python↔Java 공유 schema의 최소 skeleton을 만든다(형식 자체는 아직
+  미확정 — 아래 참고).
+- **In scope:** schema 형식 결정을 위한 설계 검토, 최소 schema 후보(예:
+  OrderIntent) skeleton, schema validation 방법 검토.
+- **Out of scope:** implementation agent(구현자 subagent), Java/Python 실제
+  런타임 코드, live/risk 관련 설정.
+- **Source docs:** `docs/00_INDEX.md` §6 (item 6), `docs/10_OPEN_QUESTIONS_AND_RISKS.md`
+  §1 (item 5), `docs/11_DECISION_LOG.md`, `docs/03_HYBRID_JAVA_ARCHITECTURE_DECISION.md`,
+  이 문서.
+- **Risk class:** R2 (schema/architecture contract).
 - **Acceptance criteria:** TBD — 실제 task packet 작성 시 확정.
-- **Required review:** CodeRabbit + security-gates. Second reviewer 필요 여부는
-  실제 범위 확정 후 재평가.
-- **Stop conditions:** CLAUDE.md의 비협상 규칙을 완화하려는 설계, 또는 R4
-  범위(live/risk/credential) 작업을 자동화하려는 방향으로 설계되는 경우.
+- **Required review:** CodeRabbit + security-gates + `architecture-reviewer`
+  (schema/contract 변경이므로 second AI reviewer 후보,
+  `docs/claude/CLAUDE_OPERATING_MODEL.md` §9 참고).
+- **Stop conditions:** `docs/00_INDEX.md` §6 item 6(JSON Schema vs Protobuf)을
+  임의로 확정하려는 경우, 또는 CLAUDE.md의 비협상 규칙을 완화하려는 설계로
+  이어지는 경우.
+
+새 schema 형식 결정(JSON Schema vs Protobuf)은 여기서 확정하지 않는다.
+`docs/00_INDEX.md` §6 item 6과 `docs/10_OPEN_QUESTIONS_AND_RISKS.md`의
+"JSON Schema(v0.1 추천) vs Protobuf(후기)"를 그대로 인계한다.
 
 ---
 
