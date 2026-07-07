@@ -32,7 +32,12 @@ Candidate 1 / Issue #6 — shared contract baseline.
 - schema versioning convention
 - valid / invalid fixtures
 - deterministic Draft 2020-12 validation suite
+- `.github/workflows/security-gates.yml`에 schema validation suite 실행 단계 추가
+  (기존에는 self-report에만 의존했음; `docs/claude/CODERABBIT_REVIEW_MODEL.md`
+  §3의 schema 추가 gate를 CI로 강제)
 - `docs/00_INDEX.md`와 open-question source 정합화
+- `architecture-reviewer` / `test-reviewer` / `risk-reviewer` 실행 완료(모두
+  PASS; risk-reviewer는 순수 데이터 계약이라 risk 변경 사항 없음을 확인)
 
 Candidate 1은 Java/Python runtime, OMS, Risk Gateway 구현을 포함하지 않는다.
 
