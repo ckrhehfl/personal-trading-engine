@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pte:schema:v0.1:common",
+  "title": "Personal Trading Engine Common Contract Definitions v0.1",
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "0.1.0",
+      "description": "Semantic version of the v0.1 shared-contract line."
+    },
+    "nonEmptyIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "\\S"
+    },
+    "instrument": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "\\S",
+      "description": "Canonical instrument identifier. Exact exchange symbol mapping is out of scope."
+    },
+    "positiveDecimal": {
+      "type": "string",
+      "pattern": "^(?:0\\.(?:0*[1-9]\\d*)|[1-9]\\d*(?:\\.\\d+)?)$",
+      "description": "Positive base-10 decimal encoded as a string to avoid binary-float drift across languages."
+    },
+    "epochMillis": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "UTC Unix epoch timestamp in milliseconds."
+    }
+  }
+}
