@@ -10,7 +10,7 @@
     "schemaVersion": {"$ref": "urn:pte:schema:v0.1:common#/$defs/schemaVersion"},
     "decisionId": {"$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"},
     "intentId": {"$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"},
-    "outcome": {"type": "string", "enum": ["APPROVED", "REJECTED"]},
+    "outcome": {"type": "string", "enum": ["PASS", "BLOCK"]},
     "reasonCodes": {
       "type": "array",
       "items": {"$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"},
@@ -21,11 +21,11 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"outcome": {"const": "REJECTED"}}, "required": ["outcome"]},
+      "if": {"properties": {"outcome": {"const": "BLOCK"}}, "required": ["outcome"]},
       "then": {"properties": {"reasonCodes": {"minItems": 1}}}
     },
     {
-      "if": {"properties": {"outcome": {"const": "APPROVED"}}, "required": ["outcome"]},
+      "if": {"properties": {"outcome": {"const": "PASS"}}, "required": ["outcome"]},
       "then": {"properties": {"reasonCodes": {"maxItems": 0}}}
     }
   ]
