@@ -10,10 +10,11 @@ import java.util.Optional;
  *
  * <p>A {@code clientOrderId} can register at most one order for the
  * lifetime of a single {@code OrderRegistry} instance. This is a
- * pure-domain, single-process, in-memory invariant only. It makes no claim
- * about idempotency across process restarts, multiple JVMs, network
- * retries, or exchange-side retries -- those are deferred beyond this
- * skeleton (see {@code docs/06_VALIDATION_POLICY.md} §5).
+ * pure-domain, single-process, in-memory invariant only: it is backed by a
+ * plain, non-thread-safe {@link HashMap} and makes no claim about
+ * idempotency across process restarts, multiple JVMs, network retries,
+ * exchange-side retries, or concurrent callers -- those are deferred beyond
+ * this skeleton (see {@code docs/06_VALIDATION_POLICY.md} §5).
  */
 public final class OrderRegistry {
 

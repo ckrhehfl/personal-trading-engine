@@ -104,6 +104,54 @@ class OrderLifecycleTest {
         assertEquals(OrderState.PARTIALLY_FILLED, order.state());
     }
 
+    @Test
+    void newToPartiallyFilledIsIllegal() {
+        Order order = newOrder();
+        IllegalOrderTransitionException ex =
+                assertThrows(IllegalOrderTransitionException.class, order::partiallyFill);
+        assertEquals(OrderState.NEW, ex.from());
+        assertEquals(OrderState.PARTIALLY_FILLED, ex.to());
+        assertEquals(OrderState.NEW, order.state());
+    }
+
+    @Test
+    void acceptedToAcceptedIsIllegal() {
+        Order order = newOrder();
+        order.accept();
+        IllegalOrderTransitionException ex =
+                assertThrows(IllegalOrderTransitionException.class, order::accept);
+        assertEquals(OrderState.ACCEPTED, ex.from());
+        assertEquals(OrderState.ACCEPTED, ex.to());
+        assertEquals(OrderState.ACCEPTED, order.state());
+    }
+
+    @Test
+    void partiallyFilledToAcceptedIsIllegal() {
+        Order order = newOrder();
+        order.accept();
+        order.partiallyFill();
+        IllegalOrderTransitionException ex =
+                assertThrows(IllegalOrderTransitionException.class, order::accept);
+        assertEquals(OrderState.PARTIALLY_FILLED, ex.from());
+        assertEquals(OrderState.ACCEPTED, ex.to());
+        assertEquals(OrderState.PARTIALLY_FILLED, order.state());
+    }
+
+    @Test
+    void repeatedPartiallyFilledIsIllegal() {
+        // Locks in the design decision documented in OrderTransitions: fill-quantity
+        // aggregation across repeated partial fills is deferred, so a second
+        // partiallyFill() call from PARTIALLY_FILLED is not modeled as legal.
+        Order order = newOrder();
+        order.accept();
+        order.partiallyFill();
+        IllegalOrderTransitionException ex =
+                assertThrows(IllegalOrderTransitionException.class, order::partiallyFill);
+        assertEquals(OrderState.PARTIALLY_FILLED, ex.from());
+        assertEquals(OrderState.PARTIALLY_FILLED, ex.to());
+        assertEquals(OrderState.PARTIALLY_FILLED, order.state());
+    }
+
     // ------------------------------------------------------------------
     // Terminal-state protection: no transition leaves a terminal state
     // ------------------------------------------------------------------
