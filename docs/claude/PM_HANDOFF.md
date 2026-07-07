@@ -26,9 +26,9 @@
 
 ### Current candidate
 
-Candidate 2 / Issue #8 — Java OMS state-machine skeleton.
+Candidate 2 / Issue #8 — Java OMS state-machine skeleton. 구현은 PR #9.
 
-**상태:** PR 생성 예정/open, pending merge. `main`에는 아직 merge되지 않았다.
+**상태:** PR #9 open, pending merge. `main`에는 아직 merge되지 않았다.
 Candidate 3는 시작하지 않았다.
 
 현재 branch(`worktree-java-oms-skeleton`)에 다음이 구현되어 있다:
