@@ -15,10 +15,7 @@
       "pattern": "\\S"
     },
     "instrument": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128,
-      "pattern": "\\S",
+      "$ref": "#/$defs/nonEmptyIdentifier",
       "description": "Canonical instrument identifier. Exact exchange symbol mapping is out of scope."
     },
     "positiveDecimal": {
