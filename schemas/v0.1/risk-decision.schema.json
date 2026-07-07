@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pte:schema:v0.1:risk-decision",
+  "title": "RiskDecision v0.1",
+  "description": "Decision envelope produced by the Java Risk Gateway boundary.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "decisionId", "intentId", "outcome", "reasonCodes", "evaluatedAtEpochMs"],
+  "properties": {
+    "schemaVersion": {"$ref": "urn:pte:schema:v0.1:common#/$defs/schemaVersion"},
+    "decisionId": {"$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"},
+    "intentId": {"$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"},
+    "outcome": {"type": "string", "enum": ["APPROVED", "REJECTED"]},
+    "reasonCodes": {
+      "type": "array",
+      "items": {"$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"},
+      "uniqueItems": true,
+      "description": "Stable machine-readable reason strings. The closed rejection-reason enum is intentionally deferred."
+    },
+    "evaluatedAtEpochMs": {"$ref": "urn:pte:schema:v0.1:common#/$defs/epochMillis"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "REJECTED"}}, "required": ["outcome"]},
+      "then": {"properties": {"reasonCodes": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"outcome": {"const": "APPROVED"}}, "required": ["outcome"]},
+      "then": {"properties": {"reasonCodes": {"maxItems": 0}}}
+    }
+  ]
+}
