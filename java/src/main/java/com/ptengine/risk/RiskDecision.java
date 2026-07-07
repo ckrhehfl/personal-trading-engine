@@ -51,7 +51,7 @@ public record RiskDecision(
             try {
                 RiskRejectReason.valueOf(code);
             } catch (IllegalArgumentException e) {
-                throw new InvalidRiskDecisionException("Unknown reasonCode: " + code);
+                throw new InvalidRiskDecisionException("Unknown reasonCode: " + code, e);
             }
         }
         reasonCodes = List.copyOf(new LinkedHashSet<>(reasonCodes));

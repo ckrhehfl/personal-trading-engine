@@ -12,4 +12,8 @@ public final class InvalidRiskDecisionException extends IllegalArgumentException
     public InvalidRiskDecisionException(String message) {
         super(message);
     }
+
+    public InvalidRiskDecisionException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

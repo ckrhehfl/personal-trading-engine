@@ -101,9 +101,12 @@ class RiskDecisionTest {
 
     @Test
     void unknownReasonCodeRejected() {
-        assertThrows(
+        InvalidRiskDecisionException exception = assertThrows(
                 InvalidRiskDecisionException.class,
                 () -> decision(RiskOutcome.BLOCK, List.of("NOT_A_REAL_REASON")));
+        assertTrue(
+                exception.getCause() instanceof IllegalArgumentException,
+                "expected the original RiskRejectReason.valueOf() failure preserved as the cause");
     }
 
     @Test
