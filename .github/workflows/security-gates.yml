@@ -48,6 +48,10 @@ jobs:
         run: |
           python -m unittest tests/schemas/test_schema_contracts.py -v
 
+      - name: Run Python backtest tests
+        run: |
+          PYTHONPATH=python python -m unittest discover -s python/tests -p "test_*.py" -v
+
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
