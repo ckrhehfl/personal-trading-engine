@@ -40,10 +40,19 @@ class RiskDecisionTest {
     }
 
     @Test
-    void duplicateReasonsDoNotSurvive() {
+    void duplicateReasonsRejected() {
+        assertThrows(
+                InvalidRiskDecisionException.class,
+                () -> decision(
+                        RiskOutcome.BLOCK,
+                        List.of("RISK_ENGINE_ERROR", "RISK_ENGINE_ERROR", "RISK_CONFIGURATION_MISSING")));
+    }
+
+    @Test
+    void multipleDistinctReasonsPreserveGivenOrder() {
         RiskDecision decision =
-                decision(RiskOutcome.BLOCK, List.of("RISK_ENGINE_ERROR", "RISK_ENGINE_ERROR", "RISK_CONFIGURATION_MISSING"));
-        assertEquals(List.of("RISK_ENGINE_ERROR", "RISK_CONFIGURATION_MISSING"), decision.reasonCodes());
+                decision(RiskOutcome.BLOCK, List.of("RISK_CONFIGURATION_MISSING", "RISK_ENGINE_ERROR"));
+        assertEquals(List.of("RISK_CONFIGURATION_MISSING", "RISK_ENGINE_ERROR"), decision.reasonCodes());
     }
 
     @Test
@@ -100,13 +109,15 @@ class RiskDecisionTest {
     }
 
     @Test
-    void unknownReasonCodeRejected() {
-        InvalidRiskDecisionException exception = assertThrows(
-                InvalidRiskDecisionException.class,
-                () -> decision(RiskOutcome.BLOCK, List.of("NOT_A_REAL_REASON")));
-        assertTrue(
-                exception.getCause() instanceof IllegalArgumentException,
-                "expected the original RiskRejectReason.valueOf() failure preserved as the cause");
+    void openSchemaValidReasonStringOutsideRiskRejectReasonAccepted() {
+        RiskDecision decision = decision(RiskOutcome.BLOCK, List.of("SOME_OPEN_REASON_NOT_IN_THE_ENUM"));
+        assertEquals(List.of("SOME_OPEN_REASON_NOT_IN_THE_ENUM"), decision.reasonCodes());
+    }
+
+    @Test
+    void killSwitchActiveReasonAccepted() {
+        RiskDecision decision = decision(RiskOutcome.BLOCK, List.of("KILL_SWITCH_ACTIVE"));
+        assertEquals(List.of("KILL_SWITCH_ACTIVE"), decision.reasonCodes());
     }
 
     @Test
@@ -115,5 +126,49 @@ class RiskDecisionTest {
         withNullElement.add("RISK_ENGINE_ERROR");
         withNullElement.add(null);
         assertThrows(InvalidRiskDecisionException.class, () -> decision(RiskOutcome.BLOCK, withNullElement));
+    }
+
+    @Test
+    void blankReasonCodeElementRejected() {
+        assertThrows(InvalidRiskDecisionException.class, () -> decision(RiskOutcome.BLOCK, List.of("   ")));
+    }
+
+    @Test
+    void reasonCodeAtMaxLengthAccepted() {
+        String maxLength = "R".repeat(RiskDecision.MAX_IDENTIFIER_LENGTH);
+        RiskDecision decision = decision(RiskOutcome.BLOCK, List.of(maxLength));
+        assertEquals(List.of(maxLength), decision.reasonCodes());
+    }
+
+    @Test
+    void reasonCodeExceedingMaxLengthRejected() {
+        String tooLong = "R".repeat(RiskDecision.MAX_IDENTIFIER_LENGTH + 1);
+        assertThrows(InvalidRiskDecisionException.class, () -> decision(RiskOutcome.BLOCK, List.of(tooLong)));
+    }
+
+    @Test
+    void decisionIdAtMaxLengthAccepted() {
+        String maxLength = "d".repeat(RiskDecision.MAX_IDENTIFIER_LENGTH);
+        RiskDecision decision = new RiskDecision(
+                RiskDecision.SCHEMA_VERSION, maxLength, "intent-1", RiskOutcome.PASS, List.of(), 1_000L);
+        assertEquals(maxLength, decision.decisionId());
+    }
+
+    @Test
+    void decisionIdExceedingMaxLengthRejected() {
+        String tooLong = "d".repeat(RiskDecision.MAX_IDENTIFIER_LENGTH + 1);
+        assertThrows(
+                InvalidRiskDecisionException.class,
+                () -> new RiskDecision(
+                        RiskDecision.SCHEMA_VERSION, tooLong, "intent-1", RiskOutcome.PASS, List.of(), 1_000L));
+    }
+
+    @Test
+    void intentIdExceedingMaxLengthRejected() {
+        String tooLong = "i".repeat(RiskDecision.MAX_IDENTIFIER_LENGTH + 1);
+        assertThrows(
+                InvalidRiskDecisionException.class,
+                () -> new RiskDecision(
+                        RiskDecision.SCHEMA_VERSION, "decision-1", tooLong, RiskOutcome.PASS, List.of(), 1_000L));
     }
 }

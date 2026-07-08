@@ -272,4 +272,39 @@ class OrderIntentTest {
                         null,
                         1_000L));
     }
+
+    @Test
+    void identifierAtMaxLengthAccepted() {
+        String maxLength = "i".repeat(OrderIntent.MAX_IDENTIFIER_LENGTH);
+        OrderIntent intent = new OrderIntent(
+                OrderIntent.SCHEMA_VERSION,
+                maxLength,
+                "strategy-1",
+                "BTCUSDT",
+                IntentType.ENTER,
+                Direction.LONG,
+                OrderType.MARKET,
+                new BigDecimal("100"),
+                null,
+                1_000L);
+        assertEquals(maxLength, intent.intentId());
+    }
+
+    @Test
+    void identifierExceedingMaxLengthRejected() {
+        String tooLong = "i".repeat(OrderIntent.MAX_IDENTIFIER_LENGTH + 1);
+        assertThrows(
+                InvalidOrderIntentException.class,
+                () -> new OrderIntent(
+                        OrderIntent.SCHEMA_VERSION,
+                        tooLong,
+                        "strategy-1",
+                        "BTCUSDT",
+                        IntentType.ENTER,
+                        Direction.LONG,
+                        OrderType.MARKET,
+                        new BigDecimal("100"),
+                        null,
+                        1_000L));
+    }
 }
