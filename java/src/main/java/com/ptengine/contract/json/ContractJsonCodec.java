@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.ptengine.contract.ContractLimits;
 import com.ptengine.contract.Direction;
 import com.ptengine.contract.IntentType;
 import com.ptengine.contract.OrderIntent;
@@ -40,7 +41,7 @@ public final class ContractJsonCodec {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final int MAX_IDENTIFIER_LENGTH = 128;
+    private static final int MAX_IDENTIFIER_LENGTH = ContractLimits.MAX_IDENTIFIER_LENGTH;
     private static final int MAX_DECIMAL_LENGTH = 64;
 
     /** Mirrors {@code common.schema.json}'s {@code positiveDecimal} pattern exactly. */

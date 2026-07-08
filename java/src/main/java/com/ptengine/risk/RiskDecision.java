@@ -1,6 +1,7 @@
 package com.ptengine.risk;
 
-import java.util.LinkedHashSet;
+import com.ptengine.contract.ContractLimits;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -24,7 +25,7 @@ public record RiskDecision(
     public static final String SCHEMA_VERSION = "0.1.0";
 
     /** Matches {@code nonEmptyIdentifier.maxLength} in the v0.1 common schema. */
-    public static final int MAX_IDENTIFIER_LENGTH = 128;
+    public static final int MAX_IDENTIFIER_LENGTH = ContractLimits.MAX_IDENTIFIER_LENGTH;
 
     /**
      * @param reasonCodes wrapped as an immutable list preserving caller order. The schema
@@ -50,7 +51,7 @@ public record RiskDecision(
         if (reasonCodes == null) {
             throw new InvalidRiskDecisionException("reasonCodes must not be null");
         }
-        Set<String> seen = new LinkedHashSet<>();
+        Set<String> seen = new HashSet<>();
         for (String code : reasonCodes) {
             if (code == null) {
                 throw new InvalidRiskDecisionException("reasonCodes must not contain a null element");

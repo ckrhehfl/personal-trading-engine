@@ -31,7 +31,7 @@ public record OrderIntent(
     public static final String SCHEMA_VERSION = "0.1.0";
 
     /** Matches {@code nonEmptyIdentifier.maxLength} in the v0.1 common schema. */
-    public static final int MAX_IDENTIFIER_LENGTH = 128;
+    public static final int MAX_IDENTIFIER_LENGTH = ContractLimits.MAX_IDENTIFIER_LENGTH;
 
     public OrderIntent {
         if (!SCHEMA_VERSION.equals(schemaVersion)) {
