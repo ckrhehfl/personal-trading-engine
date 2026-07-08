@@ -1,12 +1,18 @@
 package com.ptengine.risk;
 
 /**
- * Initial closed Java rejection-reason enum for {@link RiskDecision#reasonCodes()}.
- * {@code schemas/v0.1/risk-decision.schema.json} intentionally left this closed
- * enum deferred to the Java Risk Gateway task; this is that task.
+ * Closed enum of the rejection reasons the present {@link RiskGateway} rules actually emit.
  *
- * <p>Deliberately minimal. Each value's {@link #name()} is used verbatim as the
- * schema-aligned {@code reasonCodes} string.
+ * <p>This is <strong>not</strong> a wire-format whitelist for {@link RiskDecision#reasonCodes()}.
+ * {@code schemas/v0.1/risk-decision.schema.json} intentionally keeps {@code reasonCodes} open
+ * (any {@code nonEmptyIdentifier}-shaped string), and {@link RiskDecision} accepts any
+ * schema-valid reason string accordingly &mdash; including reasons no current {@link RiskRule}
+ * emits, such as a future kill-switch reason. This enum only documents/names the closed set of
+ * reasons this codebase's rules currently produce; it is a producer-side convenience, not a
+ * consumer-side (wire) validation boundary.
+ *
+ * <p>Each value's {@link #name()} is used verbatim as the schema-aligned {@code reasonCodes}
+ * string when a {@link RiskRule} in this codebase emits it.
  */
 public enum RiskRejectReason {
 
