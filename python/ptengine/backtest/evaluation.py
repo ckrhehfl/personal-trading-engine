@@ -2,9 +2,10 @@
 
 This is a separation baseline, not a research platform: it runs one fixed
 strategy configuration and one fixed backtest config separately over two
-non-overlapping, chronologically-ordered candle segments. It does not fit,
-tune, optimize, or select among strategies, and it does not implement
-walk-forward validation.
+chronologically-ordered candle segments, where the out-of-sample segment must
+start strictly after the in-sample segment ends (a touching/equal boundary is
+rejected, not just genuine overlap). It does not fit, tune, optimize, or
+select among strategies, and it does not implement walk-forward validation.
 """
 from __future__ import annotations
 
@@ -44,7 +45,10 @@ def run_in_sample_out_of_sample(
     Rejects: empty segments, non-chronological candles within a segment
     (via the same check the engine applies), any time overlap between the
     two segments, and an out-of-sample segment that does not start strictly
-    after the in-sample segment ends.
+    after the in-sample segment ends. Equality at the boundary (the
+    out-of-sample segment's first open exactly matching the in-sample
+    segment's last close) is rejected, not accepted — out-of-sample must
+    begin strictly after in-sample ends, with no touching boundary.
     """
     if not in_sample_candles or not out_of_sample_candles:
         raise InvalidEvaluationSegmentsError(
@@ -56,10 +60,10 @@ def run_in_sample_out_of_sample(
 
     in_sample_end_ms = in_sample_candles[-1].close_time_ms
     out_of_sample_start_ms = out_of_sample_candles[0].open_time_ms
-    if out_of_sample_start_ms < in_sample_end_ms:
+    if out_of_sample_start_ms <= in_sample_end_ms:
         raise InvalidEvaluationSegmentsError(
-            "out-of-sample segment must start at or after the in-sample segment ends "
-            f"(out-of-sample open_time_ms {out_of_sample_start_ms} < "
+            "out-of-sample segment must start strictly after the in-sample segment ends "
+            f"(out-of-sample open_time_ms {out_of_sample_start_ms} <= "
             f"in-sample close_time_ms {in_sample_end_ms})"
         )
 

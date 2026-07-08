@@ -47,8 +47,8 @@
 
 Candidate 4 / Issue #12 — Python deterministic backtest skeleton.
 
-**상태:** 구현 완료, PR 생성 진행 중. `main`에는 아직 merge되지 않았다.
-Candidate 5는 시작하지 않았다.
+**상태:** PR #13 open, review correction 반영 완료, merge 대기 중. `main`에는
+아직 merge되지 않았다. Candidate 5는 시작하지 않았다.
 
 현재 branch(`worktree-python-deterministic-backtest-skeleton`, base
 `39867fe`)에 다음이 구현되어 있다:
@@ -74,21 +74,19 @@ Candidate 5는 시작하지 않았다.
   `turnover`(gross executed notional / initial equity) 공식 전부 docstring에
   명시.
 - `python/ptengine/backtest/evaluation.py` — `run_in_sample_out_of_sample`:
-  IS/OOS 세그먼트 각각 chronological 검증, 겹침·역순 거부(OOS 시작 <
-  IS 종료 시 reject), 동일 config로 별도 실행, 결과 분리 반환. 파라미터
+  IS/OOS 세그먼트 각각 chronological 검증, 겹침·역순 거부, **OOS는 IS 종료
+  시점보다 엄격히 나중에(strictly after) 시작해야 함 — 경계 동일(touching)
+  케이스도 reject**, 동일 config로 별도 실행, 결과 분리 반환. 파라미터
   피팅/선택/walk-forward 없음 — separation baseline이지 연구 플랫폼이 아님.
-- `python/tests/backtest/*.py` — 58 unittest 테스트, 전부 pass. Candidate 4
-  issue #12에 명시된 27개 필수 케이스(determinism, no-hidden-clock,
-  no-future-candle-access, next-bar-open 체결, same-candle 체결 불가능,
-  final-signal-no-execution, 수수료/슬리피지 정확값, 최소주문수량, LONG/SHORT
-  round trip, flip ordering, stable fill ordering, drawdown/turnover/benchmark
-  정확값, SMA warm-up/history-purity, 잘못된 candle timestamp/OHLC 거부,
-  IS/OOS overlap/역순/분리 결과)를 모두 포함하고, `test-reviewer` 1차
+- `python/tests/backtest/*.py` — 59 unittest 테스트, 전부 pass. Candidate 4
+  issue #12에 명시된 27개 필수 케이스를 모두 포함하고, `test-reviewer` 1차
   CHANGES_NEEDED에서 지적된 6개 gap(최소주문수량 경계값, slippage 적용 후
   가격 기준 fee 정확값, SHORT mark-to-market 중간 검증, out-of-sample 빈
   세그먼트 대칭 케이스, single-candle run, 다중 rejection 누적, 그리고
   tautological했던 IS/OOS state-isolation 테스트를 실제 stateful
-  `CountingStrategy`로 재작성)까지 추가해 총 52→58개로 확장함.
+  `CountingStrategy`로 재작성)까지 추가해 52→58개로 확장했으며, review
+  correction round에서 IS/OOS strict-after 경계 수정에 맞춰 58→59개로 다시
+  확장함(아래 review correction 참고).
 - `.github/workflows/security-gates.yml`에 최소 스텝 1개 추가:
   `PYTHONPATH=python python -m unittest discover -s python/tests -p "test_*.py" -v`.
   새 workflow 없음, 기존 스텝 제거/약화 없음.
@@ -102,6 +100,37 @@ Candidate 5는 시작하지 않았다.
   테스트). 재검증에서 프로덕션 코드(`engine.py`, `evaluation.py`)가 byte-for-byte
   무변경임을 확인하고, 7개 수정 전부를 실제 arithmetic/control-flow 추적으로
   검증한 뒤 **최종 PASS**.
+
+### PR #13 review correction round
+
+PR #13 오픈 후 CodeRabbit이 두 가지를 지적함:
+
+1. **`evaluation.py`의 IS/OOS 경계 조건**: 원래
+   PM task packet은 "OOS가 IS보다 엄격히 나중에 시작"을 요구했는데, 구현은
+   `out_of_sample_start_ms < in_sample_end_ms`(reject)를 써서 경계 동일
+   (touching) 케이스를 실수로 허용하고 있었다. 이것은 **실제로 유효한 PM
+   acceptance mismatch**로 판단해 수정함: 조건을 `<=`(reject)로 강화하고,
+   docstring/에러 메시지도 "strictly after, equality rejected"로 정정.
+   `test_evaluation.py`에 경계-동일 reject 회귀 테스트를 추가하고, 기존
+   touching-boundary accept 테스트를 삭제(그 자리를 대체), strictly-later
+   accept 테스트를 신설, state-isolation 테스트의 OOS 시작 시각도 새 규칙에
+   맞게 조정 — 58→59개 테스트.
+2. `engine.py`의 LONG↔SHORT flip 중 open-leg만 최소주문수량으로 거부되는
+   시나리오에 대한 회귀 테스트 요청 — **코드를 직접 추적해 unreachable로
+   판정**: `BacktestConfig`는 run 전체에서 불변이며, `current_position`이
+   FLAT을 벗어나는 유일한 경로가 `order_quantity >= minimum_order_quantity`
+   를 통과한 open뿐이므로, 기존 포지션이 존재한다는 것 자체가 그 run에서
+   `order_quantity >= minimum_order_quantity`임을 이미 증명한다. 따라서 이미
+   보유한 포지션의 flip open이 같은 최소수량 조건으로 실패하는 상태는
+   `run_backtest`를 통해 도달 불가능함. CodeRabbit이 제안한 테스트 fixture
+   (`qty=1, min=2`) 자체도 첫 LONG open이 이미 거부되어 제안된 시나리오에
+   도달하지 못함을 직접 추적으로 확인. **코드/테스트 변경 없이 근거를 담아
+   thread에 답변**, thread는 수동으로 resolve하지 않음.
+
+`engine.py`, `model.py`, `strategy.py`는 이 correction round에서 무변경.
+변경은 `evaluation.py`, `test_evaluation.py`, `docs/claude/PM_HANDOFF.md`로
+한정. 두 필수 reviewer(`python-research-reviewer`, `test-reviewer`) 모두
+correction round를 재검토해 **최종 PASS**.
 
 Candidate 4는 표준 라이브러리만 사용(pandas/numpy/pytest 등 third-party
 의존성 추가 없음). `java/**`, `schemas/**` 변경 없음. Python↔Java 일치성

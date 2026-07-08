@@ -41,10 +41,36 @@ class OutOfSampleBeforeInSampleRejectionTest(unittest.TestCase):
             )
 
 
-class SeparateResultsTest(unittest.TestCase):
-    def test_contiguous_non_overlapping_segments_accepted(self):
+class ContiguousBoundaryRejectionTest(unittest.TestCase):
+    def test_out_of_sample_starting_exactly_at_in_sample_end_is_rejected(self):
+        # out_of_sample's first open_time_ms is exactly equal to in_sample's
+        # last close_time_ms — a touching, non-overlapping boundary. The PM
+        # task packet requires OOS to start *strictly* after IS ends, so
+        # this exact-equality case must be rejected, not accepted.
         in_sample = make_series([(100, 100), (100, 110), (110, 120)], start_ms=0)
         out_of_sample = make_series([(120, 120), (120, 90)], start_ms=3 * INTERVAL_MS)
+
+        self.assertEqual(out_of_sample[0].open_time_ms, in_sample[-1].close_time_ms)
+
+        with self.assertRaises(InvalidEvaluationSegmentsError):
+            run_in_sample_out_of_sample(
+                in_sample,
+                out_of_sample,
+                lambda: ScriptedStrategy({}),
+                make_config(),
+                make_metadata(backtest_run_id="is"),
+                make_metadata(backtest_run_id="oos"),
+            )
+
+
+class SeparateResultsTest(unittest.TestCase):
+    def test_strictly_later_segments_accepted(self):
+        # A real time gap between in-sample's end and out-of-sample's start
+        # (not merely touching) must be accepted.
+        in_sample = make_series([(100, 100), (100, 110), (110, 120)], start_ms=0)
+        out_of_sample = make_series([(120, 120), (120, 90)], start_ms=4 * INTERVAL_MS)
+
+        self.assertGreater(out_of_sample[0].open_time_ms, in_sample[-1].close_time_ms)
 
         result = run_in_sample_out_of_sample(
             in_sample,
@@ -72,7 +98,7 @@ class SeparateResultsTest(unittest.TestCase):
         # never equal 2 again, so the OOS segment would end up with zero
         # fills — this test would then fail.
         in_sample = make_series([(100, 100), (100, 100), (100, 100)], start_ms=0)
-        out_of_sample = make_series([(100, 100), (100, 100), (100, 100)], start_ms=3 * INTERVAL_MS)
+        out_of_sample = make_series([(100, 100), (100, 100), (100, 100)], start_ms=4 * INTERVAL_MS)
 
         result = run_in_sample_out_of_sample(
             in_sample,
