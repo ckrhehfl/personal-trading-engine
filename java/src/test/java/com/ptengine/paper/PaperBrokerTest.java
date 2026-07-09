@@ -104,7 +104,7 @@ class PaperBrokerTest {
     @Test
     void nullIntentRejected() {
         assertThrows(
-                NullPointerException.class,
+                InvalidPaperExecutionException.class,
                 () -> broker.execute(
                         null, passDecision("intent-1"),
                         snapshot("BTCUSDT", new BigDecimal("49900"), new BigDecimal("50000")), metadata()));
@@ -114,7 +114,7 @@ class PaperBrokerTest {
     void nullMarketSnapshotRejected() {
         OrderIntent intent = marketIntent(IntentType.ENTER, Direction.LONG);
         assertThrows(
-                NullPointerException.class,
+                InvalidPaperExecutionException.class,
                 () -> broker.execute(intent, passDecision("intent-1"), null, metadata()));
     }
 
@@ -122,7 +122,7 @@ class PaperBrokerTest {
     void nullExecutionMetadataRejected() {
         OrderIntent intent = marketIntent(IntentType.ENTER, Direction.LONG);
         assertThrows(
-                NullPointerException.class,
+                InvalidPaperExecutionException.class,
                 () -> broker.execute(
                         intent, passDecision("intent-1"),
                         snapshot("BTCUSDT", new BigDecimal("49900"), new BigDecimal("50000")), null));

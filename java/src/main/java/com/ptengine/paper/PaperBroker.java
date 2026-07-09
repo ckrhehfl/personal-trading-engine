@@ -7,7 +7,6 @@ import com.ptengine.contract.OrderType;
 import com.ptengine.risk.RiskDecision;
 import com.ptengine.risk.RiskOutcome;
 import java.math.BigDecimal;
-import java.util.Objects;
 
 /**
  * Pure-domain, deterministic paper execution boundary.
@@ -29,12 +28,18 @@ public final class PaperBroker {
             RiskDecision riskDecision,
             PaperMarketSnapshot marketSnapshot,
             PaperExecutionMetadata metadata) {
-        Objects.requireNonNull(intent, "intent");
+        if (intent == null) {
+            throw new InvalidPaperExecutionException("intent must not be null");
+        }
         if (riskDecision == null) {
             throw new InvalidPaperExecutionException("riskDecision must not be null");
         }
-        Objects.requireNonNull(marketSnapshot, "marketSnapshot");
-        Objects.requireNonNull(metadata, "metadata");
+        if (marketSnapshot == null) {
+            throw new InvalidPaperExecutionException("marketSnapshot must not be null");
+        }
+        if (metadata == null) {
+            throw new InvalidPaperExecutionException("metadata must not be null");
+        }
 
         if (riskDecision.outcome() != RiskOutcome.PASS) {
             throw new InvalidPaperExecutionException(
