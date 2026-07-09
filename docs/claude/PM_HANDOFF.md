@@ -340,8 +340,17 @@ schema에 없다.
 `risk-decision.schema.json`은 전부 무변경. `java/**`,
 `python/**`(schema harness 제외) 변경 없음.
 
-**Required review:** `architecture-reviewer`, `risk-reviewer`,
-`test-reviewer` — 결과는 PR 생성 후 본 문서에 갱신한다.
+**Required review:** `architecture-reviewer` — **PASS**(required/optional
+field 13/3개 정확히 일치, forbidden R4-인접 필드 전무, Draft 2020-12 유효성
+확인, 기존 3개 schema 무변경, doc 정렬 사실 확인, open decision 9개 무변경
+확인). `risk-reviewer` — **PASS**(수치 risk 값·live flag·자격증명·order
+policy·margin/position mode·정확한 거래소 symbol 전무 확인, `status`
+`CANDIDATE`만 허용 확인, R4 아님 독자 확인). `test-reviewer` — **PASS**(13개
+fixture 전부 정확히 1개 keyword로 isolate됨을 field-by-field 재확인, valid
+fixture 2개가 근접 중복이 아님을 확인). 검증: Python schema suite 4/4 pass,
+Python backtest suite 59/59 pass(무변경), Java Gradle suite 185/185
+pass(무변경). Local `security_gates.py` PASS(0 findings). CodeRabbit /
+`security-gates` required check — PR 생성 후 진행.
 
 ## 2. Current code maturity
 
