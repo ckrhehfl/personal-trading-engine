@@ -15,6 +15,7 @@ FIXTURE_DIR = REPO_ROOT / "tests" / "schemas" / "fixtures"
 SCHEMA_FILES = {
     "order-intent": "order-intent.schema.json",
     "risk-decision": "risk-decision.schema.json",
+    "deployment-manifest": "deployment-manifest.schema.json",
 }
 
 EXPECTED_INVALID_KEYWORDS = {
@@ -33,6 +34,17 @@ EXPECTED_INVALID_KEYWORDS = {
     "risk-decision/invalid/duplicate-reasons.json": "uniqueItems",
     "risk-decision/invalid/pass-with-reason.json": "maxItems",
     "risk-decision/invalid/unknown-field.json": "additionalProperties",
+    "deployment-manifest/invalid/wrong-schema-version.json": "const",
+    "deployment-manifest/invalid/unknown-field.json": "additionalProperties",
+    "deployment-manifest/invalid/missing-backtest-run-id.json": "required",
+    "deployment-manifest/invalid/blank-deployment-id.json": "pattern",
+    "deployment-manifest/invalid/identifier-too-long.json": "maxLength",
+    "deployment-manifest/invalid/wrong-status.json": "const",
+    "deployment-manifest/invalid/epoch-millis-overflow.json": "maximum",
+    "deployment-manifest/invalid/negative-created-at.json": "minimum",
+    "deployment-manifest/invalid/null-model-version.json": "type",
+    "deployment-manifest/invalid/blank-previous-deployment-id.json": "pattern",
+    "deployment-manifest/invalid/blank-instrument.json": "pattern",
 }
 
 
@@ -68,6 +80,7 @@ class SharedSchemaContractTests(unittest.TestCase):
                 "common.schema.json",
                 "order-intent.schema.json",
                 "risk-decision.schema.json",
+                "deployment-manifest.schema.json",
             },
         )
         for name, schema in self.schemas.items():
