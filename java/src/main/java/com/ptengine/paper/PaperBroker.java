@@ -62,7 +62,7 @@ public final class PaperBroker {
 
         switch (intent.orderType()) {
             case MARKET -> {
-                executionPrice = side == PaperExecutionSide.BUY ? marketSnapshot.bestAsk() : marketSnapshot.bestBid();
+                executionPrice = bestPriceFor(side, marketSnapshot);
                 status = PaperExecutionStatus.FILLED;
             }
             case LIMIT -> {
@@ -70,7 +70,7 @@ public final class PaperBroker {
                         ? marketSnapshot.bestAsk().compareTo(intent.limitPrice()) <= 0
                         : marketSnapshot.bestBid().compareTo(intent.limitPrice()) >= 0;
                 if (crosses) {
-                    executionPrice = side == PaperExecutionSide.BUY ? marketSnapshot.bestAsk() : marketSnapshot.bestBid();
+                    executionPrice = bestPriceFor(side, marketSnapshot);
                     status = PaperExecutionStatus.FILLED;
                 } else {
                     executionPrice = null;
@@ -103,5 +103,9 @@ public final class PaperBroker {
             return isLong ? PaperExecutionSide.BUY : PaperExecutionSide.SELL;
         }
         return isLong ? PaperExecutionSide.SELL : PaperExecutionSide.BUY;
+    }
+
+    private static BigDecimal bestPriceFor(PaperExecutionSide side, PaperMarketSnapshot marketSnapshot) {
+        return side == PaperExecutionSide.BUY ? marketSnapshot.bestAsk() : marketSnapshot.bestBid();
     }
 }
