@@ -1,8 +1,6 @@
 package com.ptengine.paper;
 
-import com.ptengine.contract.ContractLimits;
 import java.math.BigDecimal;
-import java.util.Objects;
 
 /**
  * Deterministic, immutable result of one {@link PaperBroker} execution attempt.
@@ -22,16 +20,22 @@ public record PaperExecutionResult(
         long evaluatedAtEpochMs) {
 
     public PaperExecutionResult {
-        requireValidIdentifier(executionId, "executionId");
-        requireValidIdentifier(intentId, "intentId");
-        requireValidIdentifier(riskDecisionId, "riskDecisionId");
-        requireValidIdentifier(instrument, "instrument");
-        Objects.requireNonNull(side, "side");
-        Objects.requireNonNull(requestedNotional, "requestedNotional");
+        PaperValidation.requireValidIdentifier(executionId, "executionId");
+        PaperValidation.requireValidIdentifier(intentId, "intentId");
+        PaperValidation.requireValidIdentifier(riskDecisionId, "riskDecisionId");
+        PaperValidation.requireValidIdentifier(instrument, "instrument");
+        if (side == null) {
+            throw new InvalidPaperExecutionException("side must not be null");
+        }
+        if (requestedNotional == null) {
+            throw new InvalidPaperExecutionException("requestedNotional must not be null");
+        }
         if (requestedNotional.signum() <= 0) {
             throw new InvalidPaperExecutionException("requestedNotional must be positive, was: " + requestedNotional);
         }
-        Objects.requireNonNull(status, "status");
+        if (status == null) {
+            throw new InvalidPaperExecutionException("status must not be null");
+        }
         if (status == PaperExecutionStatus.FILLED) {
             if (executionPrice == null) {
                 throw new InvalidPaperExecutionException("FILLED requires a non-null executionPrice");
@@ -46,17 +50,6 @@ public record PaperExecutionResult(
         if (evaluatedAtEpochMs < 0) {
             throw new InvalidPaperExecutionException(
                     "evaluatedAtEpochMs must be non-negative, was: " + evaluatedAtEpochMs);
-        }
-    }
-
-    private static void requireValidIdentifier(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new InvalidPaperExecutionException(fieldName + " must not be blank");
-        }
-        if (value.length() > ContractLimits.MAX_IDENTIFIER_LENGTH) {
-            throw new InvalidPaperExecutionException(
-                    fieldName + " must be at most " + ContractLimits.MAX_IDENTIFIER_LENGTH + " characters, was: "
-                            + value.length());
         }
     }
 }

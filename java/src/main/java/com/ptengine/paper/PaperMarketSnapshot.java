@@ -1,8 +1,6 @@
 package com.ptengine.paper;
 
-import com.ptengine.contract.ContractLimits;
 import java.math.BigDecimal;
-import java.util.Objects;
 
 /**
  * Explicit, deterministic single-instrument top-of-book snapshot supplied by the caller.
@@ -13,9 +11,13 @@ import java.util.Objects;
 public record PaperMarketSnapshot(String instrument, BigDecimal bestBid, BigDecimal bestAsk, long observedAtEpochMs) {
 
     public PaperMarketSnapshot {
-        requireValidIdentifier(instrument, "instrument");
-        Objects.requireNonNull(bestBid, "bestBid");
-        Objects.requireNonNull(bestAsk, "bestAsk");
+        PaperValidation.requireValidIdentifier(instrument, "instrument");
+        if (bestBid == null) {
+            throw new InvalidPaperExecutionException("bestBid must not be null");
+        }
+        if (bestAsk == null) {
+            throw new InvalidPaperExecutionException("bestAsk must not be null");
+        }
         if (bestBid.signum() <= 0) {
             throw new InvalidPaperExecutionException("bestBid must be positive, was: " + bestBid);
         }
@@ -29,17 +31,6 @@ public record PaperMarketSnapshot(String instrument, BigDecimal bestBid, BigDeci
         if (observedAtEpochMs < 0) {
             throw new InvalidPaperExecutionException(
                     "observedAtEpochMs must be non-negative, was: " + observedAtEpochMs);
-        }
-    }
-
-    private static void requireValidIdentifier(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new InvalidPaperExecutionException(fieldName + " must not be blank");
-        }
-        if (value.length() > ContractLimits.MAX_IDENTIFIER_LENGTH) {
-            throw new InvalidPaperExecutionException(
-                    fieldName + " must be at most " + ContractLimits.MAX_IDENTIFIER_LENGTH + " characters, was: "
-                            + value.length());
         }
     }
 }

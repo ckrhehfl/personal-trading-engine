@@ -95,7 +95,7 @@ class PaperBrokerTest {
     void nullRiskDecisionRejected() {
         OrderIntent intent = marketIntent(IntentType.ENTER, Direction.LONG);
         assertThrows(
-                NullPointerException.class,
+                InvalidPaperExecutionException.class,
                 () -> broker.execute(
                         intent, null, snapshot("BTCUSDT", new BigDecimal("49900"), new BigDecimal("50000")),
                         metadata()));

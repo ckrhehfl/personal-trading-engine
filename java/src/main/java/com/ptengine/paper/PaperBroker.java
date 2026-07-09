@@ -30,7 +30,9 @@ public final class PaperBroker {
             PaperMarketSnapshot marketSnapshot,
             PaperExecutionMetadata metadata) {
         Objects.requireNonNull(intent, "intent");
-        Objects.requireNonNull(riskDecision, "riskDecision");
+        if (riskDecision == null) {
+            throw new InvalidPaperExecutionException("riskDecision must not be null");
+        }
         Objects.requireNonNull(marketSnapshot, "marketSnapshot");
         Objects.requireNonNull(metadata, "metadata");
 
@@ -53,25 +55,24 @@ public final class PaperBroker {
         BigDecimal executionPrice;
         PaperExecutionStatus status;
 
-        if (intent.orderType() == OrderType.MARKET) {
-            executionPrice = side == PaperExecutionSide.BUY ? marketSnapshot.bestAsk() : marketSnapshot.bestBid();
-            status = PaperExecutionStatus.FILLED;
-        } else if (side == PaperExecutionSide.BUY) {
-            if (marketSnapshot.bestAsk().compareTo(intent.limitPrice()) <= 0) {
-                executionPrice = marketSnapshot.bestAsk();
+        switch (intent.orderType()) {
+            case MARKET -> {
+                executionPrice = side == PaperExecutionSide.BUY ? marketSnapshot.bestAsk() : marketSnapshot.bestBid();
                 status = PaperExecutionStatus.FILLED;
-            } else {
-                executionPrice = null;
-                status = PaperExecutionStatus.NO_FILL;
             }
-        } else {
-            if (marketSnapshot.bestBid().compareTo(intent.limitPrice()) >= 0) {
-                executionPrice = marketSnapshot.bestBid();
-                status = PaperExecutionStatus.FILLED;
-            } else {
-                executionPrice = null;
-                status = PaperExecutionStatus.NO_FILL;
+            case LIMIT -> {
+                boolean crosses = side == PaperExecutionSide.BUY
+                        ? marketSnapshot.bestAsk().compareTo(intent.limitPrice()) <= 0
+                        : marketSnapshot.bestBid().compareTo(intent.limitPrice()) >= 0;
+                if (crosses) {
+                    executionPrice = side == PaperExecutionSide.BUY ? marketSnapshot.bestAsk() : marketSnapshot.bestBid();
+                    status = PaperExecutionStatus.FILLED;
+                } else {
+                    executionPrice = null;
+                    status = PaperExecutionStatus.NO_FILL;
+                }
             }
+            default -> throw new InvalidPaperExecutionException("unsupported orderType: " + intent.orderType());
         }
 
         return new PaperExecutionResult(

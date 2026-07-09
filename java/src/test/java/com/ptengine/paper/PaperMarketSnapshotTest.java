@@ -83,14 +83,16 @@ class PaperMarketSnapshotTest {
     }
 
     @Test
-    void nullBidThrowsNpe() {
+    void nullBidRejected() {
         assertThrows(
-                NullPointerException.class, () -> snapshot("BTCUSDT", null, new BigDecimal("50000"), 3_000L));
+                InvalidPaperExecutionException.class,
+                () -> snapshot("BTCUSDT", null, new BigDecimal("50000"), 3_000L));
     }
 
     @Test
-    void nullAskThrowsNpe() {
+    void nullAskRejected() {
         assertThrows(
-                NullPointerException.class, () -> snapshot("BTCUSDT", new BigDecimal("49900"), null, 3_000L));
+                InvalidPaperExecutionException.class,
+                () -> snapshot("BTCUSDT", new BigDecimal("49900"), null, 3_000L));
     }
 }

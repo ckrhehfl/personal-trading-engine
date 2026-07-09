@@ -112,4 +112,157 @@ class PaperExecutionResultTest {
                         null,
                         4_000L));
     }
+
+    @Test
+    void blankIntentIdRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        " ",
+                        "decision-1",
+                        "BTCUSDT",
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void overlengthIntentIdRejected() {
+        String tooLong = "X".repeat(129);
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        tooLong,
+                        "decision-1",
+                        "BTCUSDT",
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void blankRiskDecisionIdRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        " ",
+                        "BTCUSDT",
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void overlengthRiskDecisionIdRejected() {
+        String tooLong = "X".repeat(129);
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        tooLong,
+                        "BTCUSDT",
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void blankInstrumentRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        "decision-1",
+                        " ",
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void overlengthInstrumentRejected() {
+        String tooLong = "X".repeat(129);
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        "decision-1",
+                        tooLong,
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void nullSideRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        "decision-1",
+                        "BTCUSDT",
+                        null,
+                        new BigDecimal("100"),
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void nullStatusRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        "decision-1",
+                        "BTCUSDT",
+                        PaperExecutionSide.BUY,
+                        new BigDecimal("100"),
+                        null,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void nullRequestedNotionalRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class,
+                () -> new PaperExecutionResult(
+                        "exec-1",
+                        "intent-1",
+                        "decision-1",
+                        "BTCUSDT",
+                        PaperExecutionSide.BUY,
+                        null,
+                        PaperExecutionStatus.NO_FILL,
+                        null,
+                        4_000L));
+    }
+
+    @Test
+    void filledWithNegativePriceRejected() {
+        assertThrows(
+                InvalidPaperExecutionException.class, () -> result(PaperExecutionStatus.FILLED, new BigDecimal("-1")));
+    }
 }
