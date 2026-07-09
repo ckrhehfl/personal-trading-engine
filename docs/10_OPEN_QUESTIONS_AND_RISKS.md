@@ -109,7 +109,7 @@
 
 - 실제 Java package 구조
 - 실제 Python package 구조
-- manifest schema 초안
+- manifest generation/consumption path
 - OrderState enum 정의
 - RiskRejectReason enum 정의
 - BingX API mapping table

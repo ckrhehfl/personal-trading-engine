@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pte:schema:v0.1:deployment-manifest",
+  "title": "DeploymentManifest v0.1",
+  "description": "Candidate-only, non-authorizing deployment envelope: deployment identity, strategy/version provenance, data/parameter/backtest provenance, target references, risk-profile reference, and optional feature/model/previous-deployment references. Shape validation only. This contract is not execution authority, not risk approval, not live approval, and does not prove that any referenced artifact, backtest run, or risk profile exists or is valid. `status` accepts only `CANDIDATE` in this baseline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "deploymentId",
+    "strategyId",
+    "strategyVersion",
+    "parameterVersion",
+    "dataVersion",
+    "backtestRunId",
+    "riskProfileId",
+    "exchange",
+    "instrument",
+    "timeframe",
+    "status",
+    "createdAtEpochMs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/schemaVersion"
+    },
+    "deploymentId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "strategyId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "strategyVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "parameterVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "dataVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "backtestRunId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier",
+      "description": "Mandatory provenance: this manifest must always be traceable to one explicit backtest run identifier. Existence or pass/fail of the referenced run is not verified by this schema."
+    },
+    "riskProfileId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier",
+      "description": "Reference only. Existence or content of the referenced risk profile is not verified by this schema."
+    },
+    "exchange": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier",
+      "description": "Target exchange identifier only. Does not decide the exact exchange API symbol."
+    },
+    "instrument": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/instrument"
+    },
+    "timeframe": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier"
+    },
+    "status": {
+      "type": "string",
+      "const": "CANDIDATE",
+      "description": "Only CANDIDATE is allowed in the v0.1 baseline. This schema does not encode PAPER/CANARY/LIVE activation states."
+    },
+    "createdAtEpochMs": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/epochMillis"
+    },
+    "featureVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier",
+      "description": "Optional. Omit when no separately versioned feature artifact applies."
+    },
+    "modelVersion": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier",
+      "description": "Optional. Omit when no model artifact applies. Do not use a sentinel string such as \"none\"."
+    },
+    "previousDeploymentId": {
+      "$ref": "urn:pte:schema:v0.1:common#/$defs/nonEmptyIdentifier",
+      "description": "Optional reference only. This schema does not verify existence, difference from deploymentId, or rollback readiness."
+    }
+  }
+}

@@ -16,9 +16,15 @@ The v0.1 baseline contains only:
 - `common.schema.json`
 - `order-intent.schema.json`
 - `risk-decision.schema.json`
+- `deployment-manifest.schema.json`
 
-Exchange-specific schemas, generated language models, `PositionSnapshot`, and
-`DeploymentManifest` are intentionally out of scope.
+`deployment-manifest.schema.json` is a candidate-only, non-authorizing shape
+contract: it does not authorize deployment, encode production trading-risk
+values, or prove that any referenced artifact, backtest run, or risk profile
+exists or is valid.
+
+Exchange-specific schemas, generated language models, and `PositionSnapshot`
+are intentionally out of scope.
 
 ## Versioning convention
 

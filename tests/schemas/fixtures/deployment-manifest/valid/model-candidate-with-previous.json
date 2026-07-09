@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "0.1.0",
+  "deploymentId": "deployment-002",
+  "strategyId": "strategy-smoke",
+  "strategyVersion": "1.1.0",
+  "parameterVersion": "param-set-002",
+  "dataVersion": "data-2026-07-02",
+  "backtestRunId": "backtest-run-002",
+  "riskProfileId": "risk-profile-canary",
+  "exchange": "bingx",
+  "instrument": "BTC-USDT-PERP",
+  "timeframe": "15m",
+  "status": "CANDIDATE",
+  "createdAtEpochMs": 1783396800101,
+  "featureVersion": "feature-set-001",
+  "modelVersion": "model-2026-07-02-a",
+  "previousDeploymentId": "deployment-001"
+}

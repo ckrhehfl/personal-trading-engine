@@ -40,26 +40,40 @@ deployment_id
 
 ## 3. Deployment Manifest
 
-Python이 배포 후보를 만든다. Java는 manifest를 읽고 검증한다.
+Python이 배포 후보를 만든다. Java는 (향후 Candidate에서) manifest를 읽고
+검증한다. 이 문서 작성 시점에는 Python generator나 Java loader/parser
+구현이 아직 없다 — canonical shape만 `schemas/v0.1/deployment-manifest.schema.json`에
+존재한다(Candidate 7). 이 schema는 candidate-only, non-authorizing shape
+validation 계약이다: 실행 권한, risk 승인, live 승인이 아니며, 참조된
+backtest/artifact/risk profile의 존재나 유효성을 증명하지 않는다. v0.1
+baseline에서 `status`는 `CANDIDATE`만 허용한다.
 
-예시:
+예시 (canonical camelCase wire 이름, `schemas/v0.1/deployment-manifest.schema.json`
+기준):
 
-```yaml
-deployment_id: dep_2026_07_03_001
-strategy_id: btc_trend_v1
-strategy_version: 1.0.0
-parameter_version: 2026-07-03-a
-model_version: none
-data_version: bingx_btcusdt_2026_07_03
-risk_profile: canary_v1
-exchange: bingx
-symbol: BTC/USDT:USDT
-timeframe: 15m
-leverage_max: 2
-order_policy: limit_first_market_guarded
-status: candidate
-previous_deployment_id: dep_previous
+```json
+{
+  "schemaVersion": "0.1.0",
+  "deploymentId": "dep-2026-07-03-001",
+  "strategyId": "btc_trend_v1",
+  "strategyVersion": "1.0.0",
+  "parameterVersion": "2026-07-03-a",
+  "dataVersion": "bingx_btcusdt_2026_07_03",
+  "backtestRunId": "backtest-run-001",
+  "riskProfileId": "canary_v1",
+  "exchange": "bingx",
+  "instrument": "BTC-USDT-PERP",
+  "timeframe": "15m",
+  "status": "CANDIDATE",
+  "createdAtEpochMs": 1783396800001,
+  "previousDeploymentId": "dep-previous"
+}
 ```
+
+`modelVersion`은 모델이 관여하지 않는 candidate에서는 생략한다. 매직
+sentinel 문자열(예: `none`)을 쓰지 않는다. `leverage_max`, `order_policy`,
+정확한 거래소 symbol 등 R4-인접 필드는 v0.1 schema에 없다 — 이후 별도
+결정/승인을 거쳐 다룬다.
 
 ---
 
