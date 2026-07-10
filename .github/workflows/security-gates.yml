@@ -40,6 +40,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Run merge-gate self-tests
+        run: |
+          python -m unittest tests/ci/test_security_gates.py -v
+          python -m unittest tests/claude/test_policy_guard.py -v
+
       - name: Install shared schema validation dependencies
         run: |
           python -m pip install --require-hashes -r requirements/schema-validation.txt
