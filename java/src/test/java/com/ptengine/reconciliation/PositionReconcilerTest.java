@@ -364,13 +364,22 @@ class PositionReconcilerTest {
 
     @Test
     void reasonsAreImmutable() {
+        List<PositionReconciliationResult.Reason> inputReasons =
+                new java.util.ArrayList<>(
+                        List.of(PositionReconciliationResult.Reason.INSTRUMENT_MISMATCH));
         PositionReconciliationResult result = new PositionReconciliationResult(
                 "recon-1",
                 PositionReconciliationResult.Status.MISMATCH,
-                List.of(PositionReconciliationResult.Reason.INSTRUMENT_MISMATCH),
+                inputReasons,
                 expectedSnap(),
                 observedSnap(),
                 1_000L);
+
+        inputReasons.clear();
+
+        assertEquals(
+                List.of(PositionReconciliationResult.Reason.INSTRUMENT_MISMATCH),
+                result.reasons());
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> result.reasons().add(PositionReconciliationResult.Reason.DIRECTION_MISMATCH));
