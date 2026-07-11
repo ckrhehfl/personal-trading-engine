@@ -171,8 +171,12 @@ class PaperOrderPositionReconciliationIntegrationTest {
 
         Optional<PositionSnapshot> projected = new PaperExecutionPositionProjector().project(executionResult);
         assertFalse(projected.isPresent());
-        // No PositionReconciliationResult is created: there is no observed PositionSnapshot to
-        // reconcile against for this NO_FILL path.
+
+        PositionSnapshot expected = new PositionSnapshot(
+                "BTCUSDT", Direction.LONG, new BigDecimal("100"), new BigDecimal("50100"), 4_000L);
+        Optional<PositionReconciliationResult> reconciliation = projected.map(
+                observed -> new PositionReconciler().reconcile(expected, observed, "recon-1", 9_000L));
+        assertTrue(reconciliation.isEmpty());
     }
 
     // --- D. Risk BLOCK does not create paper execution, projection, or reconciliation ---
@@ -190,8 +194,13 @@ class PaperOrderPositionReconciliationIntegrationTest {
         assertEquals(RiskOutcome.BLOCK, result.riskDecision().outcome());
         assertEquals(OrderState.REJECTED, result.orderState());
         assertTrue(result.paperExecutionResult().isEmpty());
-        // With no PaperExecutionResult, there is nothing to hand to
-        // PaperExecutionPositionProjector: no projection or reconciliation is attempted.
+
+        PositionSnapshot expected = new PositionSnapshot(
+                "BTCUSDT", Direction.LONG, new BigDecimal("100"), new BigDecimal("50000"), 4_000L);
+        Optional<PositionReconciliationResult> reconciliation = result.paperExecutionResult()
+                .flatMap(executionResult -> new PaperExecutionPositionProjector().project(executionResult))
+                .map(observed -> new PositionReconciler().reconcile(expected, observed, "recon-1", 9_000L));
+        assertTrue(reconciliation.isEmpty());
     }
 
     // --- E. FILLED but wrong expected direction reconciles as DIRECTION_MISMATCH ---
