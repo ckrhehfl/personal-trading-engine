@@ -44,6 +44,12 @@ def _subtract_exact(left: Decimal, right: Decimal) -> Decimal:
     precision fails closed instead of silently rounding. The caller's
     ambient context is left untouched.
     """
+    if not isinstance(left, Decimal) or not isinstance(right, Decimal):
+        raise InvalidBacktestReportError(
+            "exact subtraction operands must both be Decimal "
+            f"(left_type={type(left).__name__}, right_type={type(right).__name__})"
+        )
+
     if not left.is_finite() or not right.is_finite():
         raise InvalidBacktestReportError(
             f"cannot exactly subtract non-finite Decimal operands (left={left}, right={right})"
@@ -58,10 +64,22 @@ def _subtract_exact(left: Decimal, right: Decimal) -> Decimal:
     # possible borrow/sign digit at the top of the result.
     working_precision = max(len(left_tuple.digits), len(right_tuple.digits)) + exponent_gap + 2
 
+    if working_precision > decimal.MAX_PREC:
+        raise InvalidBacktestReportError(
+            "exact Decimal subtraction requires more precision than decimal.Context "
+            f"supports (required_precision={working_precision}, max_precision={decimal.MAX_PREC})"
+        )
+
     with localcontext() as ctx:
-        ctx.prec = working_precision
-        ctx.Emin = decimal.MIN_EMIN
-        ctx.Emax = decimal.MAX_EMAX
+        try:
+            ctx.prec = working_precision
+            ctx.Emin = decimal.MIN_EMIN
+            ctx.Emax = decimal.MAX_EMAX
+        except (ValueError, OverflowError) as exc:
+            raise InvalidBacktestReportError(
+                "could not configure an exact Decimal context for subtraction "
+                f"(required_precision={working_precision})"
+            ) from exc
         for signal in (
             decimal.InvalidOperation,
             decimal.Inexact,

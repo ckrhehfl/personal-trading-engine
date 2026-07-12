@@ -1,3 +1,4 @@
+import decimal
 import unittest
 from decimal import Decimal, localcontext
 
@@ -196,6 +197,7 @@ class PlainTextRenderingTest(unittest.TestCase):
     def test_scientific_notation_decimal_renders_fixed_point_without_rounding(self):
         report = BacktestReport(
             **_valid_report_kwargs(
+                backtest_run_id="release-v1",
                 initial_equity=_d("1E+4"),
                 final_equity=_d("1.05E+4"),
                 total_return=_d("5E-2"),
@@ -208,6 +210,10 @@ class PlainTextRenderingTest(unittest.TestCase):
 
         text = report.to_plain_text()
 
+        # Identifiers are emitted verbatim and are allowed to contain "e" or
+        # "E" -- this one deliberately does, to prove the exponent-notation
+        # assertion below does not reject it.
+        self.assertIn("backtestRunId=release-v1", text)
         self.assertIn("initialEquity=10000", text)
         self.assertIn("finalEquity=10500", text)
         self.assertIn("totalReturn=0.05", text)
@@ -216,10 +222,21 @@ class PlainTextRenderingTest(unittest.TestCase):
         self.assertIn("maxDrawdown=0.01", text)
         self.assertIn("turnover=0.5", text)
 
-        # Only the values, not the "...Equity"/"...Return" key names, must be
-        # free of scientific notation.
-        values = [line.split("=", 1)[1] for line in text.split("\n")]
-        for value in values:
+        # Only the seven Decimal-valued fields must be free of scientific
+        # notation; identifiers, and count fields are excluded since they are
+        # not Decimal and may legitimately contain "e"/"E" (e.g. "release-v1").
+        rendered = dict(line.split("=", 1) for line in text.split("\n"))
+        decimal_keys = (
+            "initialEquity",
+            "finalEquity",
+            "totalReturn",
+            "benchmarkReturn",
+            "excessReturn",
+            "maxDrawdown",
+            "turnover",
+        )
+        for key in decimal_keys:
+            value = rendered[key]
             self.assertNotIn("E", value)
             self.assertNotIn("e", value)
 
@@ -540,6 +557,50 @@ class AmbientDecimalContextIndependenceTest(unittest.TestCase):
 
         with self.assertRaises(InvalidBacktestReportError):
             generate_backtest_report(malformed_result)
+
+    def test_generator_rejects_non_decimal_total_return_without_leaking_attribute_error(self):
+        # _subtract_exact used to call .is_finite() before checking the
+        # operand's type, so a float total_return reached the generator and
+        # raised a bare AttributeError instead of the public
+        # InvalidBacktestReportError contract.
+        malformed_result = _make_result()
+        object.__setattr__(malformed_result, "total_return", 0.05)
+
+        with self.assertRaises(InvalidBacktestReportError):
+            generate_backtest_report(malformed_result)
+
+    def test_generator_rejects_non_decimal_benchmark_return_without_leaking_attribute_error(self):
+        malformed_result = _make_result()
+        object.__setattr__(malformed_result, "benchmark_return", "0.02")
+
+        with self.assertRaises(InvalidBacktestReportError):
+            generate_backtest_report(malformed_result)
+
+    def test_derived_precision_beyond_decimal_max_prec_fails_closed(self):
+        # Two finite, cheaply-constructed Decimal operands (one digit each)
+        # whose exponents sit at the extreme ends of the representable range.
+        # The exponent gap alone drives the derived working_precision past
+        # decimal.MAX_PREC, so assigning it to ctx.prec would previously
+        # raise a bare ValueError instead of the public
+        # InvalidBacktestReportError contract.
+        huge_positive_exponent = Decimal(f"1E+{decimal.MAX_EMAX}")
+        huge_negative_exponent = Decimal(f"1E-{abs(decimal.MIN_EMIN)}")
+
+        with localcontext() as ctx:
+            original_prec = ctx.prec
+            original_emin = ctx.Emin
+            original_emax = ctx.Emax
+
+            malformed_result = _make_result()
+            object.__setattr__(malformed_result, "total_return", huge_positive_exponent)
+            object.__setattr__(malformed_result, "benchmark_return", huge_negative_exponent)
+
+            with self.assertRaises(InvalidBacktestReportError):
+                generate_backtest_report(malformed_result)
+
+            self.assertEqual(ctx.prec, original_prec)
+            self.assertEqual(ctx.Emin, original_emin)
+            self.assertEqual(ctx.Emax, original_emax)
 
     def test_ambient_decimal_context_is_not_mutated(self):
         with localcontext() as ctx:
