@@ -64,6 +64,18 @@
 - snapshot test
 - OrderIntent 비교
 
+**Candidate 15 재확인**: shared-schema JSON-boundary compatibility
+(Candidate 5, `ContractJsonCodec` + `SharedFixtureCompatibilityTest`)와
+1건의 aligned-input MARKET-fill 동등성 baseline(Candidate 13,
+`tests/execution/fixtures/python-java-market-fill-equivalence-v0.1.json`)은
+지금 존재한다. 더 넓은 parity는 여전히 열려 있다 — 명시적으로 남은 gap:
+
+- LIMIT / NO_FILL 동등성
+- 일반 슬리피지 모델 parity
+- signal snapshot parity
+- risk decision/rule parity
+- runtime parity
+
 ### 위험 4: 선물/레버리지 위험
 
 완화:
@@ -105,13 +117,56 @@
 - schema validation
 - human approval gate
 
-아직 더 구체화해야 할 것:
+### 4.1 기술 항목 상태 재확인 (Candidate 15)
 
-- 실제 Java package 구조
-- 실제 Python package 구조
-- manifest generation/consumption path
-- OrderState enum 정의
-- RiskRejectReason enum 정의
-- BingX API mapping table
-- paper broker fill model
-- reconciliation 알고리즘
+Candidate 1–14를 거치며 아래 항목은 baseline 구현을 갖게 되었다.
+Production-complete를 의미하지 않으며, 정확한 경계는
+`docs/04_MVP_SCOPE_AND_ROADMAP.md`가 기준이다.
+
+- **실제 Java package 구조** — IMPLEMENTED_BASELINE:
+  `java/src/main/java/com/ptengine/{contract,oms,risk,paper,integration,reconciliation,report}`.
+- **실제 Python package 구조** — IMPLEMENTED_BASELINE:
+  `python/ptengine/backtest/{model,engine,strategy,evaluation}.py`.
+- **`OrderState` enum 정의** — IMPLEMENTED_BASELINE:
+  `com.ptengine.oms.OrderState`(Candidate 2). 단일 프로세스 in-memory
+  skeleton 경계 안에서만.
+- **`RiskRejectReason` enum 정의** — IMPLEMENTED_BASELINE:
+  `com.ptengine.risk.RiskRejectReason`(Candidate 3), 3개 값
+  (`RISK_CONFIGURATION_MISSING`, `RISK_ENGINE_ERROR`,
+  `RISK_STATE_DEGRADED` 예약). Production numeric risk rule에 대응하는
+  reason은 아직 없음.
+- **paper broker fill model** — IMPLEMENTED_BASELINE:
+  `com.ptengine.paper.PaperBroker`(Candidate 6). MARKET/LIMIT
+  fill-or-no-fill 로직만, partial fill/슬리피지 모델 없음.
+- **reconciliation 알고리즘** — IMPLEMENTED_BASELINE:
+  `com.ptengine.reconciliation.PositionReconciler`(Candidate 9). 1건 대
+  1건 field-for-field 비교만, continuous service 아님.
+
+여전히 미확정/미구현인 항목:
+
+- **manifest generation/consumption path** — NOT_IMPLEMENTED.
+  `schemas/v0.1/deployment-manifest.schema.json`(Candidate 7)은 shape
+  validation만 제공하며, 어떤 runtime도 이 manifest를 생성하거나 소비하지
+  않는다.
+- **BingX API mapping table** — NOT_IMPLEMENTED. 정확한 API symbol
+  결정(§1 항목 1)에 종속.
+
+### 4.2 새로 확인된 미해결 경계 (Candidate 15)
+
+Candidate 1–14 구현을 감사한 결과 다음 경계가 아직 열려 있음을 확인했다.
+이들은 새 product 결정이 아니라 구현 사실이다.
+
+- **Fill 집계 / partial-fill 회계** — `PaperExecutionPositionProjector`는
+  1건의 FILLED 실행만 1건의 포지션으로 투영하며, 여러 fill을 합산하지
+  않는다.
+- **Close/reduce 및 flat-position 표현** — `PositionSnapshot`은 정확히
+  하나의 열린 포지션만 모델링하며, flat/no-position이나 포지션
+  축소·청산을 표현하지 않는다.
+- **영속적/재시작 복구 가능한 상태** — `OrderRegistry`, `PositionSnapshot`
+  모두 in-memory이며 재시작 복구 경로가 없다.
+- **Runtime scheduling/orchestration** — 어떤 구성요소도 장시간 구동
+  loop나 스케줄러에 연결되어 있지 않다.
+- **데이터 영속화 포맷/구현** — candle이나 실행 기록을 저장하는
+  Parquet/DuckDB/PostgreSQL 등 구현이 없다.
+- **Alert transport** — 알림을 실제로 전송하는 코드가 없다(채널 자체도
+  §1 항목 9에서 여전히 미확정).
