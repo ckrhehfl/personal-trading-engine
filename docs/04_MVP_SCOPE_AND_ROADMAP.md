@@ -149,7 +149,7 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 | Java paper runtime | NOT_IMPLEMENTED | Scheduling, 지속 실행 loop, 장시간 구동 서비스 코드가 없다. 관련 클래스들의 Javadoc이 "no runtime loop, no scheduling"을 반복해서 명시한다 |
 | order intent → risk → OMS → paper fill | IMPLEMENTED_BASELINE | Candidate 8, `com.ptengine.integration.PaperOrderPipeline` — Scope: narrow. 실제 production 코드와 테스트가 존재하지만, 이를 구동하는 runtime loop/scheduler는 없다(한 번의 in-process 호출 단위로만 증명됨) |
 | position snapshot | IMPLEMENTED_BASELINE | Candidate 9/10, `PositionSnapshot`/`PaperExecutionPositionProjector` — Scope: narrow. 1건의 FILLED 실행을 최대 1건의 포지션으로 투영하는 production 코드. Fill 집계/포지션 갱신/flat 표현 없음 |
-| reconciliation test | PARTIAL | Candidate 11의 `PaperOrderPositionReconciliationIntegrationTest`는 test-only composition(자체 Javadoc 명시). 기반 알고리즘(`PositionReconciler`, Candidate 9)은 production 코드이나, continuous reconciliation service는 없다 |
+| reconciliation test | IMPLEMENTED_BASELINE | Candidate 17, `PaperExecutionPositionReconciliationCoordinator`, `PaperExecutionPositionReconciliationCoordinatorTest`, `PaperOrderPositionReconciliationIntegrationTest` — Scope: narrow. Production one-shot deterministic composition이 이제 존재한다: FILLED 실행은 실제 `PaperExecutionPositionProjector`+`PositionReconciler`로 in-process 투영·reconciliation이 가능하고, NO_FILL은 position/reconciliation을 아무것도 만들지 않는다(short-circuit). Continuous reconciliation service, scheduler/runtime loop, 외부 exchange/account 원천, tolerance/staleness policy, persistence/restart 복구, position lifecycle/집계는 여전히 없다 |
 | daily report | IMPLEMENTED_BASELINE | Candidate 12/14, `DailyPaperTradingReport`/`DailyPaperTradingReportGenerator` — Scope: narrow. Deterministic `toPlainText()` 요약과 exact invariant. Persistence·delivery 없음 |
 | Telegram alert | NOT_IMPLEMENTED | 저장소 어디에도 alert renderer/transport 코드가 없다. 알림 채널 자체가 `docs/10_OPEN_QUESTIONS_AND_RISKS.md`에서 여전히 DECISION_REQUIRED다 |
 
@@ -160,16 +160,22 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 - **MVP v0.1 foundation**: "JSON logs"를 제외한 모든 항목이
   IMPLEMENTED_BASELINE. Foundation은 실질적으로 구축되었으나, 위 표의
   caveat 없이 "v0.1 완료"라고 선언하지 않는다.
-- **MVP v0.2**: order intent→risk→OMS→paper fill, position snapshot, daily
-  report는 상태가 IMPLEMENTED_BASELINE이나 경계가 narrow(production 코드/
-  테스트 기반은 존재하되 runtime loop/fill 집계/persistence 없음)하다.
+- **MVP v0.2**: order intent→risk→OMS→paper fill, position snapshot,
+  reconciliation test, daily report는 상태가 IMPLEMENTED_BASELINE이나
+  경계가 narrow(production 코드/테스트 기반은 존재하되 runtime loop/fill
+  집계/persistence 없음)하다. reconciliation test는 Candidate 17부터
+  `PaperExecutionPositionReconciliationCoordinator`가 실제
+  `PaperExecutionPositionProjector`/`PositionReconciler`를 one-shot으로
+  composition하나, continuous reconciliation service·scheduler/runtime
+  loop·외부 exchange/account 원천·tolerance/staleness policy·
+  persistence/restart 복구·position lifecycle/집계는 여전히 없다.
   Python backtest report도 Candidate 16부터 IMPLEMENTED_BASELINE이나 경계가
   narrow하다 — 이미 생성된 `BacktestResult`/`InSampleOutOfSampleResult`
   값의 deterministic 불변 요약 모델/생성기와 단일 run·IS/OOS plain-text
   렌더링만 제공하며, 파일 persistence·차트/대시보드·report delivery·
   qualification score/pass-fail gate·`DeploymentManifest`·runtime/live
   권한은 없다. BingX 데이터 수집, candle 저장, Java paper runtime, Telegram
-  alert는 NOT_IMPLEMENTED이고 reconciliation test는 PARTIAL이다.
+  alert는 NOT_IMPLEMENTED다.
   **MVP v0.2는 진행 중이며 완료가 아니다.**
 - **프로젝트 전체**: 완료되지 않았다. `COMPLETE`, `production-ready`,
   `paper-ready`, `live-ready`, `canary-ready` 중 어떤 것도 현재 상태에
