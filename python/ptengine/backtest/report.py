@@ -13,8 +13,9 @@ report delivery service, a pass/fail qualification gate, or a
 """
 from __future__ import annotations
 
+import decimal
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from .evaluation import InSampleOutOfSampleResult
 from .model import BacktestResult
@@ -27,6 +28,63 @@ class InvalidBacktestReportError(ValueError):
 def _require_identifier(value: object, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise InvalidBacktestReportError(f"{field_name} must be a non-blank string")
+
+
+def _subtract_exact(left: Decimal, right: Decimal) -> Decimal:
+    """Compute ``left - right`` exactly, independent of the caller's ambient Decimal context.
+
+    Plain ``left - right`` is rounded to whatever precision the caller's
+    active :class:`decimal.Context` happens to have (``decimal.getcontext()``
+    / ``decimal.localcontext()``), so the same two operands can silently
+    yield different results depending on unrelated code elsewhere in the
+    process. This function instead derives a working precision from the
+    operands themselves -- never a fixed constant -- performs the
+    subtraction inside its own :func:`decimal.localcontext`, and traps every
+    signal that would indicate an inexact result, so an insufficient
+    precision fails closed instead of silently rounding. The caller's
+    ambient context is left untouched.
+    """
+    if not left.is_finite() or not right.is_finite():
+        raise InvalidBacktestReportError(
+            f"cannot exactly subtract non-finite Decimal operands (left={left}, right={right})"
+        )
+
+    left_tuple = left.as_tuple()
+    right_tuple = right.as_tuple()
+    exponent_gap = abs(left_tuple.exponent - right_tuple.exponent)
+    # Aligning the two operands to a common exponent (as subtraction does
+    # internally) can add up to `exponent_gap` digits to whichever operand
+    # has the larger (less negative) exponent; +2 leaves headroom for a
+    # possible borrow/sign digit at the top of the result.
+    working_precision = max(len(left_tuple.digits), len(right_tuple.digits)) + exponent_gap + 2
+
+    with localcontext() as ctx:
+        ctx.prec = working_precision
+        ctx.Emin = decimal.MIN_EMIN
+        ctx.Emax = decimal.MAX_EMAX
+        for signal in (
+            decimal.InvalidOperation,
+            decimal.Inexact,
+            decimal.Rounded,
+            decimal.Clamped,
+            decimal.Overflow,
+            decimal.Underflow,
+        ):
+            ctx.traps[signal] = True
+        try:
+            result = left - right
+        except decimal.DecimalException as exc:
+            raise InvalidBacktestReportError(
+                f"could not compute an exact finite Decimal subtraction for "
+                f"(left={left}, right={right})"
+            ) from exc
+
+    if not result.is_finite():
+        raise InvalidBacktestReportError(
+            f"exact Decimal subtraction produced a non-finite result for (left={left}, right={right})"
+        )
+
+    return result
 
 
 def _require_finite_decimal(value: object, field_name: str) -> None:
@@ -86,7 +144,8 @@ class BacktestReport:
         _require_non_negative_count(self.equity_point_count, "equity_point_count")
         _require_non_negative_count(self.rejected_signal_count, "rejected_signal_count")
 
-        if self.excess_return != self.total_return - self.benchmark_return:
+        expected_excess_return = _subtract_exact(self.total_return, self.benchmark_return)
+        if self.excess_return != expected_excess_return:
             raise InvalidBacktestReportError(
                 "excess_return must equal total_return - benchmark_return "
                 f"(excess_return={self.excess_return}, total_return={self.total_return}, "
@@ -156,7 +215,7 @@ def generate_backtest_report(result: BacktestResult) -> BacktestReport:
         final_equity=result.final_equity,
         total_return=result.total_return,
         benchmark_return=result.benchmark_return,
-        excess_return=result.total_return - result.benchmark_return,
+        excess_return=_subtract_exact(result.total_return, result.benchmark_return),
         max_drawdown=result.max_drawdown,
         turnover=result.turnover,
         fill_count=len(result.fills),

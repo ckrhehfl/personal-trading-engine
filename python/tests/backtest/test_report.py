@@ -1,5 +1,5 @@
 import unittest
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from ptengine.backtest.evaluation import InSampleOutOfSampleResult
 from ptengine.backtest.model import BacktestResult, EquityPoint, Fill, FillAction
@@ -419,6 +419,154 @@ class ValidationTest(unittest.TestCase):
 
         with self.assertRaises(InvalidBacktestReportError):
             generate_backtest_report(malformed_result)
+
+
+class AmbientDecimalContextIndependenceTest(unittest.TestCase):
+    """PM finding: excess_return subtraction must not depend on the caller's
+    ambient decimal.Context. Reproduction (with precision lowered to 3):
+
+        Decimal("1.2345") - Decimal("0.0001") == Decimal("1.23")   # rounded, wrong
+        Decimal("1.2345") - Decimal("0.0001") != Decimal("1.2344") # exact, correct
+
+    Every test below runs inside a deliberately low-precision localcontext to
+    prove the generator/invariant no longer reproduce that rounding.
+    """
+
+    def test_generator_is_independent_of_low_ambient_precision(self):
+        with localcontext() as ctx:
+            ctx.prec = 3
+
+            # Confirm the bug still exists in plain Decimal subtraction under
+            # this context, so this test is actually exercising the reported
+            # failure mode and not a precision setting that happens to be
+            # harmless.
+            naive = _d("1.2345") - _d("0.0001")
+            self.assertEqual(naive, _d("1.23"))
+
+            report = generate_backtest_report(
+                _make_result(total_return="1.2345", benchmark_return="0.0001")
+            )
+
+            self.assertEqual(report.excess_return, _d("1.2344"))
+            self.assertNotEqual(report.excess_return, _d("1.23"))
+
+    def test_direct_construction_rejects_rounded_value_under_low_ambient_precision(self):
+        with localcontext() as ctx:
+            ctx.prec = 3
+            with self.assertRaises(InvalidBacktestReportError):
+                BacktestReport(
+                    **_valid_report_kwargs(
+                        total_return=_d("1.2345"),
+                        benchmark_return=_d("0.0001"),
+                        excess_return=_d("1.23"),
+                    )
+                )
+
+    def test_direct_construction_accepts_exact_value_under_low_ambient_precision(self):
+        with localcontext() as ctx:
+            ctx.prec = 3
+            report = BacktestReport(
+                **_valid_report_kwargs(
+                    total_return=_d("1.2345"),
+                    benchmark_return=_d("0.0001"),
+                    excess_return=_d("1.2344"),
+                )
+            )
+
+            self.assertEqual(report.excess_return, _d("1.2344"))
+
+    def test_large_coefficient_subtraction_is_exact_under_very_low_ambient_precision(self):
+        # A round number with far more significant digits than the ambient
+        # precision below, and a small fractional subtrahend that never
+        # borrows across the integer part, so the exact result is
+        # constructible by inspection: the huge integer part is untouched,
+        # and only the fractional part changes (0.10 - 0.09 = 0.01).
+        huge_integer_part = "1" + "0" * 39  # 10**39, 40 digits
+        total_return = _d(f"{huge_integer_part}.10")
+        benchmark_return = _d("0.09")
+        expected = _d(f"{huge_integer_part}.01")
+
+        with localcontext() as ctx:
+            ctx.prec = 3
+
+            report = generate_backtest_report(
+                _make_result(total_return=total_return, benchmark_return=benchmark_return)
+            )
+
+            self.assertEqual(report.excess_return, expected)
+            self.assertEqual(format(report.excess_return, "f"), f"{huge_integer_part}.01")
+            self.assertEqual(report.to_plain_text().splitlines()[8], f"excessReturn={huge_integer_part}.01")
+
+    def test_opposite_sign_subtraction_that_grows_a_digit_is_exact_under_low_ambient_precision(self):
+        # Opposite-sign Decimal subtraction is effectively addition of
+        # magnitudes, which can grow the result's digit count by one beyond
+        # either operand's own digit count -- the borrow/sign-digit case the
+        # "+2" precision margin exists for. "999 - (-999) = 1998" is
+        # hand-computable by inspection. Under prec=3, naive subtraction
+        # rounds this to "2.00E+3"; the exact answer is "1998".
+        with localcontext() as ctx:
+            ctx.prec = 3
+
+            naive = _d("999") - _d("-999")
+            self.assertNotEqual(naive, _d("1998"))
+
+            report = generate_backtest_report(
+                _make_result(total_return="999", benchmark_return="-999")
+            )
+
+            self.assertEqual(report.excess_return, _d("1998"))
+
+    def test_negative_result_is_exact_under_low_ambient_precision(self):
+        with localcontext() as ctx:
+            ctx.prec = 3
+
+            naive = _d("0.0001") - _d("1.2345")
+            self.assertEqual(naive, _d("-1.23"))
+
+            report = generate_backtest_report(
+                _make_result(total_return="0.0001", benchmark_return="1.2345")
+            )
+
+            self.assertEqual(report.excess_return, _d("-1.2344"))
+            self.assertNotEqual(report.excess_return, _d("-1.23"))
+
+    def test_generator_propagates_error_for_non_finite_operand_via_subtract_exact(self):
+        # _subtract_exact's own non-finite guard, exercised specifically via
+        # the generate_backtest_report path (which calls it before
+        # BacktestReport construction), not just via direct
+        # BacktestReport(...) construction.
+        malformed_result = _make_result()
+        object.__setattr__(malformed_result, "total_return", Decimal("Infinity"))
+
+        with self.assertRaises(InvalidBacktestReportError):
+            generate_backtest_report(malformed_result)
+
+    def test_ambient_decimal_context_is_not_mutated(self):
+        with localcontext() as ctx:
+            ctx.prec = 5
+            original_prec = ctx.prec
+            original_emin = ctx.Emin
+            original_emax = ctx.Emax
+            original_traps = dict(ctx.traps)
+            original_flags = dict(ctx.flags)
+
+            report = generate_backtest_report(
+                _make_result(total_return="1.2345", benchmark_return="0.0001")
+            )
+            report.to_plain_text()
+            BacktestReport(
+                **_valid_report_kwargs(
+                    total_return=_d("1.2345"),
+                    benchmark_return=_d("0.0001"),
+                    excess_return=_d("1.2344"),
+                )
+            )
+
+            self.assertEqual(ctx.prec, original_prec)
+            self.assertEqual(ctx.Emin, original_emin)
+            self.assertEqual(ctx.Emax, original_emax)
+            self.assertEqual(dict(ctx.traps), original_traps)
+            self.assertEqual(dict(ctx.flags), original_flags)
 
 
 class PublicApiExportTest(unittest.TestCase):
