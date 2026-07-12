@@ -44,11 +44,12 @@ live-disabled policy ≠ 구현된 kill switch.
 
 ---
 
-## 1B. Candidate 1–14 구현 체크포인트
+## 1B. Candidate 1–14 및 M1 구현·거버넌스 체크포인트
 
-아래 표는 지금까지 merge된 각 Candidate가 실제로 `main`에 어떤 증거를
-남겼는지를 코드/스키마/테스트 경로 기준으로 기록한다. Candidate 번호
-자체는 진행 순서를 나타낼 뿐 완성도를 의미하지 않는다.
+아래 표는 지금까지 merge된 Candidate 1–14가 실제로 `main`에 남긴
+코드/스키마/테스트 증거와, M1이 추가한 governance/CI 체크포인트를 함께
+기록한다. Candidate 번호는 진행 순서를 나타낼 뿐 완성도를 의미하지 않으며,
+M1은 제품 capability가 아닌 merge-gate 인프라다.
 
 | Candidate (PR) | 항목 | 상태 | 증거 경로 | 경계 / 증명되지 않은 것 |
 |---|---|---|---|---|
