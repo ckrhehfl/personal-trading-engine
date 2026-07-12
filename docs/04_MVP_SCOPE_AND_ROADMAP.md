@@ -59,7 +59,7 @@ live-disabled policy ≠ 구현된 kill switch.
 | 5 (#15) | Schema compatibility baseline | PARTIAL | `java/.../contract/json/ContractJsonCodec.java`, `OrderIntentJsonCodecTest`, `RiskDecisionJsonCodecTest`, `SharedFixtureCompatibilityTest` | JSON-boundary codec이 공유 fixture와 호환됨만 증명. 코드 자체 Javadoc이 "전체 backtest ↔ Java trading-path 행위 동등성을 증명하지 않는다"고 명시. |
 | 6 (#17) | Deterministic Java PaperBroker skeleton | IMPLEMENTED_BASELINE | `java/.../paper/{PaperBroker,PaperMarketSnapshot,PaperExecutionResult,PaperExecutionMetadata,PaperExecutionSide,PaperExecutionStatus,PaperValidation,InvalidPaperExecutionException}.java`, `PaperBrokerTest` 외 | 호출자가 넘긴 intent/riskDecision/marketSnapshot/metadata의 순수 함수. `RiskGateway`를 직접 호출하지 않고, 포지션 상태를 모르고, OMS를 mutate하지 않음. |
 | 7 (#19) | DeploymentManifest schema baseline | IMPLEMENTED_BASELINE | `schemas/v0.1/deployment-manifest.schema.json`, `tests/schemas/fixtures/deployment-manifest/**` | 스키마 자체 description이 "candidate-only, non-authorizing... 실행 권한도 리스크 승인도 아니다"라고 명시. Shape validation만. `status`는 `CANDIDATE`만 허용. 어떤 runtime도 아직 이 manifest를 생성/소비하지 않음. |
-| M1 (#21) | Merge-gate self-tests를 CI에 편입 | IMPLEMENTED_BASELINE (governance) | `tests/ci/test_security_gates.py`, `tests/claude/test_policy_guard.py`, `.github/workflows/security-gates.yml` | 로드맵 capability가 아니라 governance/CI 인프라. |
+| M1 (#21) | Merge-gate self-tests를 CI에 편입 | IMPLEMENTED_BASELINE | `tests/ci/test_security_gates.py`, `tests/claude/test_policy_guard.py`, `.github/workflows/security-gates.yml` | Scope: governance/CI 인프라 — 로드맵 capability가 아니다. |
 | 8 (#23) | Risk → OMS → PaperBroker 통합 | IMPLEMENTED_BASELINE | `java/.../integration/{PaperOrderPipeline,PaperOrderPipelineResult}.java`, `PaperOrderPipelineTest` | 실제 `RiskGateway`+`OrderRegistry`+`PaperBroker`의 in-process composition, PASS 우회 없음. 클래스 자체 Javadoc이 "다른 호출자가 컴포넌트를 직접 호출하는 것이 불가능하다고 주장하지 않는다"고 명시. Persistence/재시작 복구/동시성/포지션·PnL 회계/reconciliation 연동 없음. |
 | 9 (#25) | PositionSnapshot reconciliation baseline | IMPLEMENTED_BASELINE | `java/.../reconciliation/{PositionSnapshot,PositionReconciler,PositionReconciliationResult}.java`, `PositionReconcilerTest` | 정확히 하나의 열린 포지션만 모델링(포트폴리오/계좌 원장 아님, flat/no-position 표현 없음). Reconciler는 호출자가 준 두 스냅샷의 순수 field-for-field 비교. Staleness threshold 없음, continuous service 아님. |
 | 10 (#27) | PaperExecutionResult → PositionSnapshot 투영 | IMPLEMENTED_BASELINE | `java/.../reconciliation/PaperExecutionPositionProjector.java`, `PaperExecutionPositionProjectorTest` | 정확히 하나의 FILLED `PaperExecutionResult`를 최대 하나의 `PositionSnapshot`으로 매핑. Fill 집계(aggregation) 없음, 기존 포지션 업데이트 없음 — 클래스 Javadoc에 명시. |
@@ -146,10 +146,10 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 | candle 저장 | NOT_IMPLEMENTED | Parquet/DuckDB/PostgreSQL 등 영속화 코드가 없다. `python/ptengine/backtest/model.py`의 `Candle`은 in-memory value type일 뿐 저장소가 아니다 |
 | Python backtest report | NOT_IMPLEMENTED | `python/ptengine/backtest/`에는 `BacktestResult`/metrics 데이터 모델(`model.py`)과 IS/OOS 분리(`evaluation.py`)만 있고, 리포트를 렌더링/생성하는 별도 모듈은 없다 |
 | Java paper runtime | NOT_IMPLEMENTED | Scheduling, 지속 실행 loop, 장시간 구동 서비스 코드가 없다. 관련 클래스들의 Javadoc이 "no runtime loop, no scheduling"을 반복해서 명시한다 |
-| order intent → risk → OMS → paper fill | IMPLEMENTED_BASELINE (narrow) | Candidate 8, `com.ptengine.integration.PaperOrderPipeline` — 실제 production 코드와 테스트가 존재하지만, 이를 구동하는 runtime loop/scheduler는 없다(한 번의 in-process 호출 단위로만 증명됨) |
-| position snapshot | IMPLEMENTED_BASELINE (narrow) | Candidate 9/10, `PositionSnapshot`/`PaperExecutionPositionProjector` — 1건의 FILLED 실행을 최대 1건의 포지션으로 투영하는 production 코드. Fill 집계/포지션 갱신/flat 표현 없음 |
+| order intent → risk → OMS → paper fill | IMPLEMENTED_BASELINE | Candidate 8, `com.ptengine.integration.PaperOrderPipeline` — Scope: narrow. 실제 production 코드와 테스트가 존재하지만, 이를 구동하는 runtime loop/scheduler는 없다(한 번의 in-process 호출 단위로만 증명됨) |
+| position snapshot | IMPLEMENTED_BASELINE | Candidate 9/10, `PositionSnapshot`/`PaperExecutionPositionProjector` — Scope: narrow. 1건의 FILLED 실행을 최대 1건의 포지션으로 투영하는 production 코드. Fill 집계/포지션 갱신/flat 표현 없음 |
 | reconciliation test | PARTIAL | Candidate 11의 `PaperOrderPositionReconciliationIntegrationTest`는 test-only composition(자체 Javadoc 명시). 기반 알고리즘(`PositionReconciler`, Candidate 9)은 production 코드이나, continuous reconciliation service는 없다 |
-| daily report | IMPLEMENTED_BASELINE (narrow) | Candidate 12/14, `DailyPaperTradingReport`/`DailyPaperTradingReportGenerator` — deterministic `toPlainText()` 요약과 exact invariant. Persistence·delivery 없음 |
+| daily report | IMPLEMENTED_BASELINE | Candidate 12/14, `DailyPaperTradingReport`/`DailyPaperTradingReportGenerator` — Scope: narrow. Deterministic `toPlainText()` 요약과 exact invariant. Persistence·delivery 없음 |
 | Telegram alert | NOT_IMPLEMENTED | 저장소 어디에도 alert renderer/transport 코드가 없다. 알림 채널 자체가 `docs/10_OPEN_QUESTIONS_AND_RISKS.md`에서 여전히 DECISION_REQUIRED다 |
 
 ---
@@ -160,10 +160,11 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
   IMPLEMENTED_BASELINE. Foundation은 실질적으로 구축되었으나, 위 표의
   caveat 없이 "v0.1 완료"라고 선언하지 않는다.
 - **MVP v0.2**: order intent→risk→OMS→paper fill, position snapshot, daily
-  report의 production 코드/테스트 기반은 존재(IMPLEMENTED_BASELINE,
-  narrow)하지만, BingX 데이터 수집, candle 저장, Python backtest report,
-  Java paper runtime, Telegram alert는 NOT_IMPLEMENTED이고 reconciliation
-  test는 PARTIAL이다. **MVP v0.2는 진행 중이며 완료가 아니다.**
+  report는 상태가 IMPLEMENTED_BASELINE이나 경계가 narrow(production 코드/
+  테스트 기반은 존재하되 runtime loop/fill 집계/persistence 없음)하다.
+  BingX 데이터 수집, candle 저장, Python backtest report, Java paper
+  runtime, Telegram alert는 NOT_IMPLEMENTED이고 reconciliation test는
+  PARTIAL이다. **MVP v0.2는 진행 중이며 완료가 아니다.**
 - **프로젝트 전체**: 완료되지 않았다. `COMPLETE`, `production-ready`,
   `paper-ready`, `live-ready`, `canary-ready` 중 어떤 것도 현재 상태에
   해당하지 않는다.

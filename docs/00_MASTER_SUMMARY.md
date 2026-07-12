@@ -204,7 +204,7 @@ MVP에서 제외한다.
 1. BingX의 정확한 상품 코드와 API 모드
 2. Hedge mode / one-way mode 중 무엇을 쓸지
 3. Cross margin / isolated margin 중 무엇을 쓸지
-4. 초기 주문 기본값: limit-first인지 market 허용 우선인지
+4. 초기 주문 정책 세부: limit-first + guarded market 방향은 유지하되 세부 미확정
 5. 손절/익절 방식: 거래소 native stop을 쓸지 내부 risk stop을 쓸지
 6. Java strategy runtime을 어디까지 둘지
 7. 백테스트와 Java live path의 일치성을 어떻게 테스트할지
