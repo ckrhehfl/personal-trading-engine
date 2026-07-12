@@ -460,10 +460,15 @@ class DailyPaperTradingReportGeneratorTest {
     }
 
     // --- L. Exact paper execution partition (invariant 7: paperFilledCount + paperNoFillCount == paperExecutionCount) ---
-    // rejectsPaperFillCountsExceedingPaperExecutionCount (section F above) already covers the
-    // overcount case (construction is rejected there via the riskPassCount/paperExecutionCount
-    // correlation, which is an inherent consequence of paperExecutionCount participating in both
-    // invariant 3 and invariant 7 -- either way, the invalid combination is correctly rejected).
+    // Invariants 1-6 together algebraically imply invariant 7 (paperFilledCount + paperNoFillCount
+    // = omsFilledCount + omsAcceptedCount = riskPassCount = paperExecutionCount), so any tuple that
+    // violates invariant 7 necessarily also violates at least one of invariants 1-6 -- true
+    // isolation of invariant 7 alone is not achievable. rejectsPaperFillCountsExceedingPaperExecutionCount
+    // (section F above) and the two tests below all leave riskPassCount at its default (0) while
+    // paperExecutionCount is nonzero, so invariant 3 (riskPassCount == paperExecutionCount) is the
+    // check that actually throws in every case; the paper-execution-partition mismatch is real,
+    // but invariant 7's own comparison is never reached. Either way, the invalid
+    // paperFilledCount/paperNoFillCount/paperExecutionCount combination is correctly rejected.
 
     @Test
     void rejectsPaperExecutionPartitionUndercount() {
