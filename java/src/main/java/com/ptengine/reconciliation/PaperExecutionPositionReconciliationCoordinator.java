@@ -29,7 +29,18 @@ public final class PaperExecutionPositionReconciliationCoordinator {
      * returns {@link Optional#empty()} without fabricating a flat/no-position snapshot or a
      * reconciliation result.
      *
+     * <p>When the execution does yield a projected snapshot (i.e. a FILLED execution), {@code
+     * expected}, {@code reconciliationId}, and {@code reconciledAtEpochMs} are validated only
+     * indirectly, by delegating to the existing {@link PositionReconciler#reconcile} /
+     * {@link PositionReconciliationResult} contract; this method performs no independent validation
+     * of its own.
+     *
      * @throws NullPointerException if {@code executionResult} is null
+     * @throws NullPointerException if {@code expected} is null and the execution yields a
+     *     projected snapshot (i.e. a FILLED execution)
+     * @throws PositionReconciliationResult.InvalidPositionReconciliationResultException if {@code
+     *     reconciliationId} is null, blank, or exceeds the maximum identifier length, or if {@code
+     *     reconciledAtEpochMs} is negative, when the execution yields a projected snapshot
      */
     public Optional<PositionReconciliationResult> reconcileIfFilled(
             PaperExecutionResult executionResult,
