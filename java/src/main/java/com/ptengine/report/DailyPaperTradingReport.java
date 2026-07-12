@@ -62,17 +62,17 @@ public record DailyPaperTradingReport(
         requireNonNegative(reconciliationMatchCount, "reconciliationMatchCount");
         requireNonNegative(reconciliationMismatchCount, "reconciliationMismatchCount");
 
-        if (riskPassCount + riskBlockCount > pipelineResultCount) {
+        if ((long) riskPassCount + riskBlockCount > pipelineResultCount) {
             throw new InvalidDailyPaperTradingReportException(
                     "riskPassCount + riskBlockCount must be <= pipelineResultCount, was: " + riskPassCount + " + "
                             + riskBlockCount + " > " + pipelineResultCount);
         }
-        if (paperFilledCount + paperNoFillCount > paperExecutionCount) {
+        if ((long) paperFilledCount + paperNoFillCount > paperExecutionCount) {
             throw new InvalidDailyPaperTradingReportException(
                     "paperFilledCount + paperNoFillCount must be <= paperExecutionCount, was: " + paperFilledCount
                             + " + " + paperNoFillCount + " > " + paperExecutionCount);
         }
-        if (reconciliationMatchCount + reconciliationMismatchCount > reconciliationResultCount) {
+        if ((long) reconciliationMatchCount + reconciliationMismatchCount > reconciliationResultCount) {
             throw new InvalidDailyPaperTradingReportException(
                     "reconciliationMatchCount + reconciliationMismatchCount must be <= reconciliationResultCount, was: "
                             + reconciliationMatchCount + " + " + reconciliationMismatchCount + " > "
