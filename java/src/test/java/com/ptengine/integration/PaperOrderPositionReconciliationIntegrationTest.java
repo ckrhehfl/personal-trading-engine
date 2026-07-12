@@ -14,8 +14,7 @@ import com.ptengine.paper.PaperExecutionMetadata;
 import com.ptengine.paper.PaperExecutionResult;
 import com.ptengine.paper.PaperExecutionStatus;
 import com.ptengine.paper.PaperMarketSnapshot;
-import com.ptengine.reconciliation.PaperExecutionPositionProjector;
-import com.ptengine.reconciliation.PositionReconciler;
+import com.ptengine.reconciliation.PaperExecutionPositionReconciliationCoordinator;
 import com.ptengine.reconciliation.PositionReconciliationResult;
 import com.ptengine.reconciliation.PositionSnapshot;
 import com.ptengine.risk.RiskDecisionMetadata;
@@ -28,13 +27,14 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * Integration-only proof that a real {@link PaperOrderPipeline} outcome can be projected by a
- * real {@link PaperExecutionPositionProjector} and reconciled by a real {@link
- * PositionReconciler}, end to end, using only real components.
+ * Integration-only proof that a real {@link PaperOrderPipeline} outcome can be reconciled end to
+ * end by the real production {@link PaperExecutionPositionReconciliationCoordinator} (Candidate
+ * 17), using only real components.
  *
- * <p>Adds no production code: this is a test-only composition of already-merged Candidate 8
- * ({@link PaperOrderPipeline}), Candidate 9 ({@link PositionSnapshot}, {@link PositionReconciler}),
- * and Candidate 10 ({@link PaperExecutionPositionProjector}) components.
+ * <p>Adds no production code of its own: this is a test-only composition of already-merged
+ * Candidate 8 ({@link PaperOrderPipeline}) and Candidate 17 ({@link
+ * PaperExecutionPositionReconciliationCoordinator}, which itself composes the already-merged
+ * Candidate 9/10 projector and reconciler).
  */
 class PaperOrderPositionReconciliationIntegrationTest {
 
@@ -99,22 +99,21 @@ class PaperOrderPositionReconciliationIntegrationTest {
         PaperExecutionResult executionResult = result.paperExecutionResult().get();
         assertEquals(PaperExecutionStatus.FILLED, executionResult.status());
 
-        Optional<PositionSnapshot> projected = new PaperExecutionPositionProjector().project(executionResult);
-        assertTrue(projected.isPresent());
-        PositionSnapshot observed = projected.get();
+        PositionSnapshot expected = new PositionSnapshot(
+                "BTCUSDT", Direction.LONG, new BigDecimal("100"), new BigDecimal("50000"), 4_000L);
+        Optional<PositionReconciliationResult> reconciliation = new PaperExecutionPositionReconciliationCoordinator()
+                .reconcileIfFilled(executionResult, expected, "recon-1", 9_000L);
+
+        assertTrue(reconciliation.isPresent());
+        PositionSnapshot observed = reconciliation.get().observed();
         assertEquals("BTCUSDT", observed.instrument());
         assertEquals(Direction.LONG, observed.direction());
         assertEquals(0, new BigDecimal("100").compareTo(observed.positionNotional()));
         assertEquals(0, new BigDecimal("50000").compareTo(observed.averageEntryPrice()));
         assertEquals(4_000L, observed.capturedAtEpochMs());
 
-        PositionSnapshot expected = new PositionSnapshot(
-                "BTCUSDT", Direction.LONG, new BigDecimal("100"), new BigDecimal("50000"), 4_000L);
-        PositionReconciliationResult reconciliation =
-                new PositionReconciler().reconcile(expected, observed, "recon-1", 9_000L);
-
-        assertEquals(PositionReconciliationResult.Status.MATCH, reconciliation.status());
-        assertTrue(reconciliation.reasons().isEmpty());
+        assertEquals(PositionReconciliationResult.Status.MATCH, reconciliation.get().status());
+        assertTrue(reconciliation.get().reasons().isEmpty());
     }
 
     // --- B. PASS MARKET SHORT/SELL-side fill projects and reconciles MATCH ---
@@ -134,25 +133,24 @@ class PaperOrderPositionReconciliationIntegrationTest {
         PaperExecutionResult executionResult = result.paperExecutionResult().get();
         assertEquals(PaperExecutionStatus.FILLED, executionResult.status());
 
-        Optional<PositionSnapshot> projected = new PaperExecutionPositionProjector().project(executionResult);
-        assertTrue(projected.isPresent());
-        PositionSnapshot observed = projected.get();
+        PositionSnapshot expected = new PositionSnapshot(
+                "BTCUSDT", Direction.SHORT, new BigDecimal("100"), new BigDecimal("49900"), 4_000L);
+        Optional<PositionReconciliationResult> reconciliation = new PaperExecutionPositionReconciliationCoordinator()
+                .reconcileIfFilled(executionResult, expected, "recon-1", 9_000L);
+
+        assertTrue(reconciliation.isPresent());
+        PositionSnapshot observed = reconciliation.get().observed();
         assertEquals("BTCUSDT", observed.instrument());
         assertEquals(Direction.SHORT, observed.direction());
         assertEquals(0, new BigDecimal("100").compareTo(observed.positionNotional()));
         assertEquals(0, new BigDecimal("49900").compareTo(observed.averageEntryPrice()));
         assertEquals(4_000L, observed.capturedAtEpochMs());
 
-        PositionSnapshot expected = new PositionSnapshot(
-                "BTCUSDT", Direction.SHORT, new BigDecimal("100"), new BigDecimal("49900"), 4_000L);
-        PositionReconciliationResult reconciliation =
-                new PositionReconciler().reconcile(expected, observed, "recon-1", 9_000L);
-
-        assertEquals(PositionReconciliationResult.Status.MATCH, reconciliation.status());
-        assertTrue(reconciliation.reasons().isEmpty());
+        assertEquals(PositionReconciliationResult.Status.MATCH, reconciliation.get().status());
+        assertTrue(reconciliation.get().reasons().isEmpty());
     }
 
-    // --- C. PASS LIMIT non-crossing NO_FILL does not create a projected PositionSnapshot ---
+    // --- C. PASS LIMIT non-crossing NO_FILL produces no projection/reconciliation result ---
 
     @Test
     void passNonCrossingLimitProducesNoProjection() {
@@ -169,14 +167,11 @@ class PaperOrderPositionReconciliationIntegrationTest {
         PaperExecutionResult executionResult = result.paperExecutionResult().get();
         assertEquals(PaperExecutionStatus.NO_FILL, executionResult.status());
 
-        Optional<PositionSnapshot> projected = new PaperExecutionPositionProjector().project(executionResult);
-        assertFalse(projected.isPresent());
-
         PositionSnapshot expected = new PositionSnapshot(
                 "BTCUSDT", Direction.LONG, new BigDecimal("100"), new BigDecimal("50100"), 4_000L);
-        Optional<PositionReconciliationResult> reconciliation = projected.map(
-                observed -> new PositionReconciler().reconcile(expected, observed, "recon-1", 9_000L));
-        assertTrue(reconciliation.isEmpty());
+        Optional<PositionReconciliationResult> reconciliation = new PaperExecutionPositionReconciliationCoordinator()
+                .reconcileIfFilled(executionResult, expected, "recon-1", 9_000L);
+        assertFalse(reconciliation.isPresent());
     }
 
     // --- D. Risk BLOCK does not create paper execution, projection, or reconciliation ---
@@ -198,8 +193,8 @@ class PaperOrderPositionReconciliationIntegrationTest {
         PositionSnapshot expected = new PositionSnapshot(
                 "BTCUSDT", Direction.LONG, new BigDecimal("100"), new BigDecimal("50000"), 4_000L);
         Optional<PositionReconciliationResult> reconciliation = result.paperExecutionResult()
-                .flatMap(executionResult -> new PaperExecutionPositionProjector().project(executionResult))
-                .map(observed -> new PositionReconciler().reconcile(expected, observed, "recon-1", 9_000L));
+                .flatMap(executionResult -> new PaperExecutionPositionReconciliationCoordinator()
+                        .reconcileIfFilled(executionResult, expected, "recon-1", 9_000L));
         assertTrue(reconciliation.isEmpty());
     }
 
@@ -215,18 +210,18 @@ class PaperOrderPositionReconciliationIntegrationTest {
                 snapshot("BTCUSDT", new BigDecimal("49900"), new BigDecimal("50000")), execMetadata("exec-1"));
 
         PaperExecutionResult executionResult = result.paperExecutionResult().orElseThrow();
-        PositionSnapshot observed = new PaperExecutionPositionProjector().project(executionResult).orElseThrow();
-
         PositionSnapshot wrongExpected = new PositionSnapshot(
                 "BTCUSDT", Direction.SHORT, new BigDecimal("100"), new BigDecimal("50000"), 4_000L);
-        PositionReconciliationResult reconciliation =
-                new PositionReconciler().reconcile(wrongExpected, observed, "recon-1", 9_000L);
+
+        PositionReconciliationResult reconciliation = new PaperExecutionPositionReconciliationCoordinator()
+                .reconcileIfFilled(executionResult, wrongExpected, "recon-1", 9_000L)
+                .orElseThrow();
 
         assertEquals(PositionReconciliationResult.Status.MISMATCH, reconciliation.status());
         assertEquals(List.of(PositionReconciliationResult.Reason.DIRECTION_MISMATCH), reconciliation.reasons());
     }
 
-    // --- F. Determinism across fresh component instances ---
+    // --- F. Determinism across fresh component/coordinator instances ---
 
     @Test
     void determinismAcrossFreshComponentInstances() {
@@ -247,16 +242,12 @@ class PaperOrderPositionReconciliationIntegrationTest {
                 secondPipeline.process(intent, riskMeta, "order-1", "client-1", marketSnapshot, execMeta);
         assertEquals(firstResult, secondResult);
 
-        Optional<PositionSnapshot> firstProjected =
-                new PaperExecutionPositionProjector().project(firstResult.paperExecutionResult().orElseThrow());
-        Optional<PositionSnapshot> secondProjected =
-                new PaperExecutionPositionProjector().project(secondResult.paperExecutionResult().orElseThrow());
-        assertEquals(firstProjected, secondProjected);
-
-        PositionReconciliationResult firstReconciliation = new PositionReconciler()
-                .reconcile(expected, firstProjected.orElseThrow(), "recon-1", 9_000L);
-        PositionReconciliationResult secondReconciliation = new PositionReconciler()
-                .reconcile(expected, secondProjected.orElseThrow(), "recon-1", 9_000L);
+        PositionReconciliationResult firstReconciliation = new PaperExecutionPositionReconciliationCoordinator()
+                .reconcileIfFilled(firstResult.paperExecutionResult().orElseThrow(), expected, "recon-1", 9_000L)
+                .orElseThrow();
+        PositionReconciliationResult secondReconciliation = new PaperExecutionPositionReconciliationCoordinator()
+                .reconcileIfFilled(secondResult.paperExecutionResult().orElseThrow(), expected, "recon-1", 9_000L)
+                .orElseThrow();
         assertEquals(firstReconciliation, secondReconciliation);
     }
 }
