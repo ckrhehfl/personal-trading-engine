@@ -1,0 +1,57 @@
+{
+  "fixtureVersion": "python-java-market-fill-equivalence.v0.1",
+  "cases": [
+    {
+      "caseId": "enter-long-market-buy",
+      "intentType": "ENTER",
+      "direction": "LONG",
+      "orderType": "MARKET",
+      "referencePrice": "100",
+      "slippageBps": "100",
+      "bestBid": "99",
+      "bestAsk": "101",
+      "expectedStatus": "FILLED",
+      "expectedSide": "BUY",
+      "expectedExecutionPrice": "101"
+    },
+    {
+      "caseId": "enter-short-market-sell",
+      "intentType": "ENTER",
+      "direction": "SHORT",
+      "orderType": "MARKET",
+      "referencePrice": "100",
+      "slippageBps": "100",
+      "bestBid": "99",
+      "bestAsk": "101",
+      "expectedStatus": "FILLED",
+      "expectedSide": "SELL",
+      "expectedExecutionPrice": "99"
+    },
+    {
+      "caseId": "exit-long-market-sell",
+      "intentType": "EXIT",
+      "direction": "LONG",
+      "orderType": "MARKET",
+      "referencePrice": "100",
+      "slippageBps": "100",
+      "bestBid": "99",
+      "bestAsk": "101",
+      "expectedStatus": "FILLED",
+      "expectedSide": "SELL",
+      "expectedExecutionPrice": "99"
+    },
+    {
+      "caseId": "exit-short-market-buy",
+      "intentType": "EXIT",
+      "direction": "SHORT",
+      "orderType": "MARKET",
+      "referencePrice": "100",
+      "slippageBps": "100",
+      "bestBid": "99",
+      "bestAsk": "101",
+      "expectedStatus": "FILLED",
+      "expectedSide": "BUY",
+      "expectedExecutionPrice": "101"
+    }
+  ]
+}
