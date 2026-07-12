@@ -62,22 +62,32 @@ public record DailyPaperTradingReport(
         requireNonNegative(reconciliationMatchCount, "reconciliationMatchCount");
         requireNonNegative(reconciliationMismatchCount, "reconciliationMismatchCount");
 
-        if ((long) riskPassCount + riskBlockCount > pipelineResultCount) {
-            throw new InvalidDailyPaperTradingReportException(
-                    "riskPassCount + riskBlockCount must be <= pipelineResultCount, was: " + riskPassCount + " + "
-                            + riskBlockCount + " > " + pipelineResultCount);
-        }
-        if ((long) paperFilledCount + paperNoFillCount > paperExecutionCount) {
-            throw new InvalidDailyPaperTradingReportException(
-                    "paperFilledCount + paperNoFillCount must be <= paperExecutionCount, was: " + paperFilledCount
-                            + " + " + paperNoFillCount + " > " + paperExecutionCount);
-        }
-        if ((long) reconciliationMatchCount + reconciliationMismatchCount > reconciliationResultCount) {
-            throw new InvalidDailyPaperTradingReportException(
-                    "reconciliationMatchCount + reconciliationMismatchCount must be <= reconciliationResultCount, was: "
-                            + reconciliationMatchCount + " + " + reconciliationMismatchCount + " > "
-                            + reconciliationResultCount);
-        }
+        // Invariant 1: exact risk partition.
+        requireExactSum(
+                "riskPassCount + riskBlockCount", sum(riskPassCount, riskBlockCount),
+                "pipelineResultCount", pipelineResultCount);
+        // Invariant 2: exact OMS partition.
+        requireExactSum(
+                "omsAcceptedCount + omsFilledCount + omsRejectedCount",
+                sum(omsAcceptedCount, omsFilledCount, omsRejectedCount),
+                "pipelineResultCount", pipelineResultCount);
+        // Invariant 3: risk-pass to paper-execution correlation.
+        requireExactMatch("riskPassCount", riskPassCount, "paperExecutionCount", paperExecutionCount);
+        // Invariant 4: risk-block to OMS-rejected correlation.
+        requireExactMatch("riskBlockCount", riskBlockCount, "omsRejectedCount", omsRejectedCount);
+        // Invariant 5: paper-filled to OMS-filled correlation.
+        requireExactMatch("paperFilledCount", paperFilledCount, "omsFilledCount", omsFilledCount);
+        // Invariant 6: paper-no-fill to OMS-accepted correlation.
+        requireExactMatch("paperNoFillCount", paperNoFillCount, "omsAcceptedCount", omsAcceptedCount);
+        // Invariant 7: exact paper execution partition.
+        requireExactSum(
+                "paperFilledCount + paperNoFillCount", sum(paperFilledCount, paperNoFillCount),
+                "paperExecutionCount", paperExecutionCount);
+        // Invariant 8: exact reconciliation partition.
+        requireExactSum(
+                "reconciliationMatchCount + reconciliationMismatchCount",
+                sum(reconciliationMatchCount, reconciliationMismatchCount),
+                "reconciliationResultCount", reconciliationResultCount);
 
         if (mismatchReasons == null) {
             throw new InvalidDailyPaperTradingReportException("mismatchReasons must not be null");
@@ -86,6 +96,18 @@ public record DailyPaperTradingReport(
             if (reason == null) {
                 throw new InvalidDailyPaperTradingReportException("mismatchReasons must not contain a null element");
             }
+        }
+        // Invariants 9-10: mismatch-reason cardinality consistency.
+        if (reconciliationMismatchCount == 0) {
+            if (!mismatchReasons.isEmpty()) {
+                throw new InvalidDailyPaperTradingReportException(
+                        "reconciliationMismatchCount is 0 but mismatchReasons is non-empty, had: "
+                                + mismatchReasons.size() + " reason(s)");
+            }
+        } else if (mismatchReasons.size() < reconciliationMismatchCount) {
+            throw new InvalidDailyPaperTradingReportException(
+                    "mismatchReasons.size() (" + mismatchReasons.size()
+                            + ") must be >= reconciliationMismatchCount (" + reconciliationMismatchCount + ")");
         }
         mismatchReasons = List.copyOf(mismatchReasons);
     }
@@ -125,6 +147,30 @@ public record DailyPaperTradingReport(
     private static void requireNonNegative(int value, String fieldName) {
         if (value < 0) {
             throw new InvalidDailyPaperTradingReportException(fieldName + " must be non-negative, was: " + value);
+        }
+    }
+
+    /** Promotes to {@code long} before adding, so a huge pair of counts cannot wrap around as int. */
+    private static long sum(int a, int b) {
+        return (long) a + b;
+    }
+
+    /** Promotes to {@code long} before adding, so a huge triple of counts cannot wrap around as int. */
+    private static long sum(int a, int b, int c) {
+        return (long) a + b + c;
+    }
+
+    private static void requireExactSum(String sumLabel, long actualSum, String targetLabel, int target) {
+        if (actualSum != target) {
+            throw new InvalidDailyPaperTradingReportException(
+                    sumLabel + " must equal " + targetLabel + ", was: " + actualSum + " != " + target);
+        }
+    }
+
+    private static void requireExactMatch(String aLabel, int a, String bLabel, int b) {
+        if (a != b) {
+            throw new InvalidDailyPaperTradingReportException(aLabel + " must equal " + bLabel + ", was: " + a
+                    + " != " + b);
         }
     }
 
