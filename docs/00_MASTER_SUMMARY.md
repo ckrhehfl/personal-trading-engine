@@ -1,6 +1,9 @@
 # 개인용 기관식 BTC/USDT 선물 자동매매 시스템 v3 중간정리
 
-> 상태: 초기 요구사항/아키텍처 초안  
+> 상태: MVP v0.1 foundation 구축(narrow-scope, Candidate 1–14 merge 완료),
+> MVP v0.2 진행 중 — 항목별 근거는 `docs/04_MVP_SCOPE_AND_ROADMAP.md`가
+> 기준이며 이 문서 §11이 요약만 제공한다. Paper qualification 및 live/canary
+> 준비는 아직 시작하지 않았다.
 > 핵심 변경: Python-only에서 **Python Research + Java OMS/Execution Hybrid-lite**로 변경  
 > 목표: 개인용이지만 업계식 원칙을 따르는 장기 운용 가능한 자동매매 시스템
 
@@ -201,10 +204,46 @@ MVP에서 제외한다.
 1. BingX의 정확한 상품 코드와 API 모드
 2. Hedge mode / one-way mode 중 무엇을 쓸지
 3. Cross margin / isolated margin 중 무엇을 쓸지
-4. 초기 주문 기본값: limit-first인지 market 허용 우선인지
+4. 초기 주문 정책 세부: limit-first + guarded market 방향은 유지하되 세부 미확정
 5. 손절/익절 방식: 거래소 native stop을 쓸지 내부 risk stop을 쓸지
-6. Java ↔ Python 공유 스키마 형식: JSON Schema 또는 Protobuf
-7. Java strategy runtime을 어디까지 둘지
-8. 백테스트와 Java live path의 일치성을 어떻게 테스트할지
-9. VPS 위치와 네트워크 지연 측정 기준
-10. 알림 채널: Telegram / Discord / Email
+6. Java strategy runtime을 어디까지 둘지
+7. 백테스트와 Java live path의 일치성을 어떻게 테스트할지
+8. VPS 위치와 네트워크 지연 측정 기준
+9. 알림 채널: Telegram / Discord / Email
+
+Java ↔ Python 공유 스키마 형식은 D011에서 해결되었다(MVP v0.1은 JSON
+Schema Draft 2020-12를 사용). 이 목록은 `docs/10_OPEN_QUESTIONS_AND_RISKS.md`
+§1의 9개 미확정 항목과 일치한다(Candidate 15 재확인).
+
+---
+
+## 11. 구현 상태 체크포인트 (Candidate 15)
+
+이 섹션은 이 문서를 "초기 요구사항/아키텍처 초안" 상태로 남겨두지 않기 위해
+Candidate 1–14가 실제로 `main`에 merge된 이후의 현재 국면을 요약한다.
+항목별 근거·경로 인용은 이 문서가 아니라
+`docs/04_MVP_SCOPE_AND_ROADMAP.md`가 기준이다. 이 섹션은 그 문서를
+복제하지 않고 4개 구분만 요약하며, 제품 비전이나 §7의 리스크 기본값을
+재정의하지 않는다.
+
+**구현된 deterministic foundation**: shared JSON Schema 계약
+(`schemas/v0.1/*`), Java OMS state machine skeleton, Java Risk Gateway
+skeleton, Python deterministic backtest engine, deterministic Java
+PaperBroker, Risk→OMS→PaperBroker in-process 파이프라인, 1-fill 포지션
+투영, daily paper report(exact invariant 포함)까지는 production 코드와
+deterministic 테스트로 뒷받침된다.
+
+**현재 pure-domain 경계**: 위 구성요소는 모두 pure-domain이거나
+caller-supplied 입력에 대한 in-process composition이다. 어떤 것도 실제
+거래소 데이터, 장시간 구동 runtime loop, 또는 영속 상태에 연결되어 있지
+않다.
+
+**운영 gap**: BingX 시세 수집, candle 저장, paper runtime, 스케줄링,
+자격증명 처리, 재시작 복구 가능한 OMS 상태, multi-fill/partial-fill 회계,
+포지션 갱신·청산(close/reduce) 표현, 실제 alert 전송, kill switch 구현은
+전부 아직 없다.
+
+**Qualification/live 주장 없음**: 30일/50회 이상 paper 운영 기록이 없으므로
+paper qualification 점수는 존재하지 않는다. Canary/live readiness 주장도
+하지 않는다. Live trading 활성화는 `CLAUDE.md`에 따라 명시적 human approval
+없이는 금지된다.
