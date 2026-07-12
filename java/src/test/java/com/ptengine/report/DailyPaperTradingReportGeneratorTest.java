@@ -307,8 +307,15 @@ class DailyPaperTradingReportGeneratorTest {
         List<PositionReconciliationResult.Reason> mutable =
                 new ArrayList<>(List.of(PositionReconciliationResult.Reason.DIRECTION_MISMATCH));
 
+        // reconciliationResultCount=1, reconciliationMatchCount=0, reconciliationMismatchCount=1:
+        // one mismatch backed by exactly the one reason in `mutable`, satisfying the exact
+        // reconciliation partition (invariant 8) and mismatch-reason-consistency (invariant 9/10)
+        // introduced by this Candidate. Under the old permissive "<=" checks, mismatchCount=0
+        // with a non-empty reasons list used to be accepted; it is now correctly rejected (see
+        // rejectsNonEmptyMismatchReasonsWhenMismatchCountIsZero below), so this defensive-copy
+        // test must use a tuple that is still valid.
         DailyPaperTradingReport report =
-                new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, mutable);
+                new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, mutable);
 
         mutable.add(PositionReconciliationResult.Reason.INSTRUMENT_MISMATCH);
         assertEquals(List.of(PositionReconciliationResult.Reason.DIRECTION_MISMATCH), report.mismatchReasons());
@@ -331,5 +338,216 @@ class DailyPaperTradingReportGeneratorTest {
 
         assertEquals(firstReport, secondReport);
         assertEquals(firstReport.toPlainText(), secondReport.toPlainText());
+    }
+
+    // --- I. Exact risk partition (invariant 1: riskPassCount + riskBlockCount == pipelineResultCount) ---
+    // rejectsRiskCountsExceedingPipelineResultCount (section F above) already covers the overcount case.
+
+    @Test
+    void rejectsRiskPartitionUndercount() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsRiskPartitionOverflowShapedValues() {
+        // riskPassCount + riskBlockCount overflows a 32-bit int; the correct long-promoted sum
+        // (4294967294) still plainly does not equal pipelineResultCount, so this must throw
+        // rather than silently accept via int wraparound.
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE,
+                        0, 0, 0, 0, 0, 0, 0, 0, 0, List.of()));
+    }
+
+    // --- J. Exact OMS partition (invariant 2: omsAcceptedCount + omsFilledCount + omsRejectedCount == pipelineResultCount) ---
+
+    @Test
+    void rejectsOmsPartitionUndercount() {
+        // riskPassCount(1) + riskBlockCount(0) == pipelineResultCount(1), so invariant 1 holds and
+        // the exception below is genuinely attributable to the OMS partition (0+0+0 != 1).
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsOmsPartitionOvercount() {
+        // Invariant 1 holds (1+0==1); omsAcceptedCount+omsFilledCount+omsRejectedCount = 2 != 1.
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsOmsPartitionThreeTermOverflowShapedValues() {
+        // Unlike a two-term sum (which can only wrap into negative territory and so can never
+        // coincide with a valid non-negative target), three Integer.MAX_VALUE terms wrap TWICE
+        // and land back in positive int range: 3 * 2147483647 = 6442450941, and
+        // 6442450941 - 2^32 = 2147483645 is itself a valid non-negative int. A buggy int-typed
+        // sum would therefore wrongly validate against pipelineResultCount=2147483645. Invariant 1
+        // holds here (2147483645 + 0 == 2147483645), isolating the exception to invariant 2's
+        // long-promoted comparison, which must correctly reject the true sum of 6442450941.
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 2_147_483_645, 2_147_483_645, 0,
+                        Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, 0, 0, 0, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void generatorFailsClosedForUnsupportedOmsStates() {
+        // The generator only buckets ACCEPTED/FILLED/REJECTED into the OMS partition. A synthetic
+        // PaperOrderPipelineResult carrying NEW, PARTIALLY_FILLED, or CANCELED increments
+        // pipelineResultCount without landing in any OMS bucket, so the resulting report must fail
+        // closed through DailyPaperTradingReport's exact invariants rather than silently
+        // undercounting. Real value objects only: no mocks, no reflection.
+        for (OrderState unsupported : List.of(OrderState.NEW, OrderState.PARTIALLY_FILLED, OrderState.CANCELED)) {
+            PaperOrderPipelineResult unsupportedResult = new PaperOrderPipelineResult(
+                    passDecision("decision-unsupported"), "order-unsupported", "client-unsupported",
+                    unsupported, Optional.empty());
+            assertThrows(
+                    DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                    () -> new DailyPaperTradingReportGenerator().generate(
+                            "report-unsupported", TRADING_DATE, 0L, List.of(unsupportedResult), List.of()),
+                    "expected generate(...) to fail closed for unsupported OrderState " + unsupported);
+        }
+    }
+
+    // --- K. Canonical pipeline correlations (invariants 3-6) ---
+    // Each test starts from the known-valid mixed baseline
+    // (pipelineResultCount=3, riskPass=2, riskBlock=1, omsAccepted=1, omsFilled=1, omsRejected=1,
+    // paperExecutionCount=2, paperFilled=1, paperNoFill=1 -- the same shape as
+    // mixedPipelineResultsAreCountedCorrectly's real generator output) and changes exactly one
+    // field so the intended correlation is the one that fails.
+
+    @Test
+    void rejectsRiskPassCountNotEqualToPaperExecutionCount() {
+        // riskPassCount raised to 3 and riskBlockCount lowered to 0 keeps invariant 1 satisfied
+        // (3+0==3) and leaves the OMS partition (1+1+1==3) untouched, so the thrown exception is
+        // attributable to riskPassCount(3) != paperExecutionCount(2).
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 3, 3, 0, 1, 1, 1, 2, 1, 1, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsRiskBlockCountNotEqualToOmsRejectedCount() {
+        // riskPassCount/riskBlockCount (2/1) are untouched from the baseline, so invariant 1 and
+        // the riskPassCount/paperExecutionCount correlation both still hold. omsAcceptedCount is
+        // lowered to 0 and omsRejectedCount raised to 2 so the OMS partition total is still 3,
+        // isolating the exception to riskBlockCount(1) != omsRejectedCount(2).
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 3, 2, 1, 0, 1, 2, 2, 1, 1, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsPaperFilledCountNotEqualToOmsFilledCount() {
+        // Only paperFilledCount changes from the baseline (1 -> 2); every OMS/risk field is
+        // untouched, so invariants 1-4 remain satisfied and the exception is attributable to
+        // paperFilledCount(2) != omsFilledCount(1).
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 3, 2, 1, 1, 1, 1, 2, 2, 1, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsPaperNoFillCountNotEqualToOmsAcceptedCount() {
+        // Only paperNoFillCount changes from the baseline (1 -> 2); every OMS/risk field and
+        // paperFilledCount are untouched, so invariants 1-5 remain satisfied and the exception is
+        // attributable to paperNoFillCount(2) != omsAcceptedCount(1).
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 3, 2, 1, 1, 1, 1, 2, 1, 2, 0, 0, 0, List.of()));
+    }
+
+    // --- L. Exact paper execution partition (invariant 7: paperFilledCount + paperNoFillCount == paperExecutionCount) ---
+    // rejectsPaperFillCountsExceedingPaperExecutionCount (section F above) already covers the
+    // overcount case (construction is rejected there via the riskPassCount/paperExecutionCount
+    // correlation, which is an inherent consequence of paperExecutionCount participating in both
+    // invariant 3 and invariant 7 -- either way, the invalid combination is correctly rejected).
+
+    @Test
+    void rejectsPaperExecutionPartitionUndercount() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsPaperExecutionPartitionOverflowShapedValues() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0,
+                        Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, 0, 0, 0, List.of()));
+    }
+
+    // --- M. Exact reconciliation partition (invariant 8) ---
+    // rejectsReconciliationCountsExceedingReconciliationResultCount (section F above) already
+    // covers the overcount case. The reconciliation domain shares no fields with the pipeline
+    // domain, so an all-zero pipeline prefix keeps invariants 1-7 trivially satisfied and cleanly
+    // isolates these two tests to invariant 8.
+
+    @Test
+    void rejectsReconciliationPartitionUndercount() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport("report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, List.of()));
+    }
+
+    @Test
+    void rejectsReconciliationPartitionOverflowShapedValues() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE, List.of()));
+    }
+
+    // --- N. Mismatch reason consistency (invariants 9-10) ---
+
+    @Test
+    void rejectsNonEmptyMismatchReasonsWhenMismatchCountIsZero() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+                        List.of(PositionReconciliationResult.Reason.DIRECTION_MISMATCH)));
+    }
+
+    @Test
+    void rejectsFewerMismatchReasonsThanMismatchCount() {
+        assertThrows(DailyPaperTradingReport.InvalidDailyPaperTradingReportException.class,
+                () -> new DailyPaperTradingReport(
+                        "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2,
+                        List.of(PositionReconciliationResult.Reason.DIRECTION_MISMATCH)));
+    }
+
+    @Test
+    void acceptsOneMismatchWithExactlyOneReason() {
+        DailyPaperTradingReport report = new DailyPaperTradingReport(
+                "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1,
+                List.of(PositionReconciliationResult.Reason.DIRECTION_MISMATCH));
+        assertEquals(1, report.reconciliationMismatchCount());
+        assertEquals(1, report.mismatchReasons().size());
+    }
+
+    @Test
+    void acceptsOneMismatchWithMultipleReasons() {
+        DailyPaperTradingReport report = new DailyPaperTradingReport(
+                "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1,
+                List.of(
+                        PositionReconciliationResult.Reason.DIRECTION_MISMATCH,
+                        PositionReconciliationResult.Reason.INSTRUMENT_MISMATCH));
+        assertEquals(1, report.reconciliationMismatchCount());
+        assertEquals(2, report.mismatchReasons().size());
+    }
+
+    @Test
+    void acceptsMultipleMismatchesWithFlattenedReasonsNotEqualInCount() {
+        // reconciliationMismatchCount=2 but mismatchReasons has 3 entries: reason-count equality
+        // is intentionally not required, only mismatchReasons.size() >= reconciliationMismatchCount.
+        DailyPaperTradingReport report = new DailyPaperTradingReport(
+                "report-1", TRADING_DATE, 0L, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 2,
+                List.of(
+                        PositionReconciliationResult.Reason.DIRECTION_MISMATCH,
+                        PositionReconciliationResult.Reason.POSITION_NOTIONAL_MISMATCH,
+                        PositionReconciliationResult.Reason.INSTRUMENT_MISMATCH));
+        assertEquals(2, report.reconciliationMismatchCount());
+        assertEquals(3, report.mismatchReasons().size());
     }
 }

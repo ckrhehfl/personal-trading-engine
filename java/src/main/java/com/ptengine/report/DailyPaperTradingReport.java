@@ -62,22 +62,24 @@ public record DailyPaperTradingReport(
         requireNonNegative(reconciliationMatchCount, "reconciliationMatchCount");
         requireNonNegative(reconciliationMismatchCount, "reconciliationMismatchCount");
 
-        if ((long) riskPassCount + riskBlockCount > pipelineResultCount) {
-            throw new InvalidDailyPaperTradingReportException(
-                    "riskPassCount + riskBlockCount must be <= pipelineResultCount, was: " + riskPassCount + " + "
-                            + riskBlockCount + " > " + pipelineResultCount);
-        }
-        if ((long) paperFilledCount + paperNoFillCount > paperExecutionCount) {
-            throw new InvalidDailyPaperTradingReportException(
-                    "paperFilledCount + paperNoFillCount must be <= paperExecutionCount, was: " + paperFilledCount
-                            + " + " + paperNoFillCount + " > " + paperExecutionCount);
-        }
-        if ((long) reconciliationMatchCount + reconciliationMismatchCount > reconciliationResultCount) {
-            throw new InvalidDailyPaperTradingReportException(
-                    "reconciliationMatchCount + reconciliationMismatchCount must be <= reconciliationResultCount, was: "
-                            + reconciliationMatchCount + " + " + reconciliationMismatchCount + " > "
-                            + reconciliationResultCount);
-        }
+        requireExactSum(
+                "riskPassCount + riskBlockCount", sum(riskPassCount, riskBlockCount),
+                "pipelineResultCount", pipelineResultCount);
+        requireExactSum(
+                "omsAcceptedCount + omsFilledCount + omsRejectedCount",
+                sum(omsAcceptedCount, omsFilledCount, omsRejectedCount),
+                "pipelineResultCount", pipelineResultCount);
+        requireExactMatch("riskPassCount", riskPassCount, "paperExecutionCount", paperExecutionCount);
+        requireExactMatch("riskBlockCount", riskBlockCount, "omsRejectedCount", omsRejectedCount);
+        requireExactMatch("paperFilledCount", paperFilledCount, "omsFilledCount", omsFilledCount);
+        requireExactMatch("paperNoFillCount", paperNoFillCount, "omsAcceptedCount", omsAcceptedCount);
+        requireExactSum(
+                "paperFilledCount + paperNoFillCount", sum(paperFilledCount, paperNoFillCount),
+                "paperExecutionCount", paperExecutionCount);
+        requireExactSum(
+                "reconciliationMatchCount + reconciliationMismatchCount",
+                sum(reconciliationMatchCount, reconciliationMismatchCount),
+                "reconciliationResultCount", reconciliationResultCount);
 
         if (mismatchReasons == null) {
             throw new InvalidDailyPaperTradingReportException("mismatchReasons must not be null");
@@ -86,6 +88,17 @@ public record DailyPaperTradingReport(
             if (reason == null) {
                 throw new InvalidDailyPaperTradingReportException("mismatchReasons must not contain a null element");
             }
+        }
+        if (reconciliationMismatchCount == 0) {
+            if (!mismatchReasons.isEmpty()) {
+                throw new InvalidDailyPaperTradingReportException(
+                        "reconciliationMismatchCount is 0 but mismatchReasons is non-empty, had: "
+                                + mismatchReasons.size() + " reason(s)");
+            }
+        } else if (mismatchReasons.size() < reconciliationMismatchCount) {
+            throw new InvalidDailyPaperTradingReportException(
+                    "mismatchReasons.size() (" + mismatchReasons.size()
+                            + ") must be >= reconciliationMismatchCount (" + reconciliationMismatchCount + ")");
         }
         mismatchReasons = List.copyOf(mismatchReasons);
     }
@@ -125,6 +138,30 @@ public record DailyPaperTradingReport(
     private static void requireNonNegative(int value, String fieldName) {
         if (value < 0) {
             throw new InvalidDailyPaperTradingReportException(fieldName + " must be non-negative, was: " + value);
+        }
+    }
+
+    /** Promotes to {@code long} before adding, so a huge pair of counts cannot wrap around as int. */
+    private static long sum(int a, int b) {
+        return (long) a + b;
+    }
+
+    /** Promotes to {@code long} before adding, so a huge triple of counts cannot wrap around as int. */
+    private static long sum(int a, int b, int c) {
+        return (long) a + b + c;
+    }
+
+    private static void requireExactSum(String sumLabel, long actualSum, String targetLabel, int target) {
+        if (actualSum != target) {
+            throw new InvalidDailyPaperTradingReportException(
+                    sumLabel + " must equal " + targetLabel + ", was: " + actualSum + " != " + target);
+        }
+    }
+
+    private static void requireExactMatch(String aLabel, int a, String bLabel, int b) {
+        if (a != b) {
+            throw new InvalidDailyPaperTradingReportException(aLabel + " must equal " + bLabel + ", was: " + a
+                    + " != " + b);
         }
     }
 
