@@ -62,20 +62,28 @@ public record DailyPaperTradingReport(
         requireNonNegative(reconciliationMatchCount, "reconciliationMatchCount");
         requireNonNegative(reconciliationMismatchCount, "reconciliationMismatchCount");
 
+        // Invariant 1: exact risk partition.
         requireExactSum(
                 "riskPassCount + riskBlockCount", sum(riskPassCount, riskBlockCount),
                 "pipelineResultCount", pipelineResultCount);
+        // Invariant 2: exact OMS partition.
         requireExactSum(
                 "omsAcceptedCount + omsFilledCount + omsRejectedCount",
                 sum(omsAcceptedCount, omsFilledCount, omsRejectedCount),
                 "pipelineResultCount", pipelineResultCount);
+        // Invariant 3: risk-pass to paper-execution correlation.
         requireExactMatch("riskPassCount", riskPassCount, "paperExecutionCount", paperExecutionCount);
+        // Invariant 4: risk-block to OMS-rejected correlation.
         requireExactMatch("riskBlockCount", riskBlockCount, "omsRejectedCount", omsRejectedCount);
+        // Invariant 5: paper-filled to OMS-filled correlation.
         requireExactMatch("paperFilledCount", paperFilledCount, "omsFilledCount", omsFilledCount);
+        // Invariant 6: paper-no-fill to OMS-accepted correlation.
         requireExactMatch("paperNoFillCount", paperNoFillCount, "omsAcceptedCount", omsAcceptedCount);
+        // Invariant 7: exact paper execution partition.
         requireExactSum(
                 "paperFilledCount + paperNoFillCount", sum(paperFilledCount, paperNoFillCount),
                 "paperExecutionCount", paperExecutionCount);
+        // Invariant 8: exact reconciliation partition.
         requireExactSum(
                 "reconciliationMatchCount + reconciliationMismatchCount",
                 sum(reconciliationMatchCount, reconciliationMismatchCount),
@@ -89,6 +97,7 @@ public record DailyPaperTradingReport(
                 throw new InvalidDailyPaperTradingReportException("mismatchReasons must not contain a null element");
             }
         }
+        // Invariants 9-10: mismatch-reason cardinality consistency.
         if (reconciliationMismatchCount == 0) {
             if (!mismatchReasons.isEmpty()) {
                 throw new InvalidDailyPaperTradingReportException(
