@@ -4,10 +4,14 @@
 
 ## 1. 미확정 항목
 
-현재 미확정 항목은 다음 9개다. 현재 작업을 막지 않는 항목은 필요 시점까지 defer한다.
+현재 미확정 항목은 다음 9개 중 8개다(항목 1은 Candidate 18에서 해결됨, 아래 참고). 현재 작업을 막지 않는 항목은 필요 시점까지 defer한다.
 
-1. BingX 정확한 상품 코드
-   - BTC/USDT USDT-M perpetual의 API symbol 확인 필요
+1. BingX 정확한 상품 코드 — Candidate 18에서 해결됨
+   - BTC/USDT USDT-M perpetual API symbol은 `BTC-USDT`다. 근거: 공식 BingX Swap
+     V2 공개 unauthenticated market-data REST endpoint(`GET
+     /openApi/swap/v2/quote/trades`)와 Candidate 18의 실측 검증. 다른
+     symbol/상품 매핑, candle/kline timeframe, private/account/order endpoint
+     매핑은 여전히 미확정이다.
 2. Position mode
    - hedge mode 또는 one-way mode
 3. Margin mode
@@ -148,8 +152,14 @@ Production-complete를 의미하지 않으며, 정확한 경계는
   `schemas/v0.1/deployment-manifest.schema.json`(Candidate 7)은 shape
   validation만 제공하며, 어떤 runtime도 이 manifest를 생성하거나 소비하지
   않는다.
-- **BingX API mapping table** — NOT_IMPLEMENTED. 정확한 API symbol
-  결정(§1 항목 1)에 종속.
+- **BingX API mapping table** — PARTIAL (Candidate 18). 현재 매핑은 정확히
+  하나다: product `BTC/USDT USDT-M perpetual` → API symbol `BTC-USDT` →
+  endpoint `/openApi/swap/v2/quote/trades` → use: public recent-trades batch
+  read (`com.ptengine.bingx.market.BingxPublicMarketDataClient`). Ordering
+  semantics(어느 원소가 최신인지)는 확립되지 않았고, `limit` query는 count
+  guarantee로 신뢰하지 않는다. 다른 symbol, candle/kline timeframe,
+  market-data storage, WebSocket, ticker/order-book mapping, private/account
+  endpoint, order mapping은 여전히 미구현/미결정이다.
 
 ### 4.2 새로 확인된 미해결 경계 (Candidate 15)
 
