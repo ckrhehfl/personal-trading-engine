@@ -148,3 +148,50 @@ recent-trades REST read symbol은 `BTC-USDT`다.
 - `limit` query에 대한 count guarantee나 배열 ordering semantics를 확정하지
   않는다.
 - runtime/persistence/WebSocket/live trading authority와 무관하다.
+
+---
+
+## D014: BingX BTC-USDT 15m kline public market-data mapping
+
+제품 소스오브트루스(`docs/00_MASTER_SUMMARY.md` §2)가 이미 확정한 초기
+타임프레임 15m에 대해, BingX Swap V2 public unauthenticated kline REST read
+엔드포인트와 interval token을 잠근다.
+
+- endpoint: `GET /openApi/swap/v3/quote/klines`
+- symbol: `BTC-USDT` (D013과 동일 매핑)
+- interval token: `15m`
+- use: read-only one-shot kline batch read 경계
+  (`com.ptengine.bingx.market.BingxPublicMarketDataClient#fetchRecentBtcUsdt15mCandles`)
+- Candidate 19 / Issue #44에서 검증/구현되었다.
+
+근거(fresh live read-only 관측, 2026-07-13):
+
+- 공식 대화형 문서(`bingx-api.github.io/docs`)는 JS-rendered SPA로 정적
+  조회가 불가능했다. 이 decision은 fresh live GET 관측(다양한 `limit` 값에
+  대해 20회 이상)과 CCXT(`ccxt/ccxt` `bingx.py` `parseOHLCV`) 2차 corroboration에
+  근거한다.
+- 응답 wire shape은 candle당 정확히 6개 키(`open`,`high`,`low`,`close`,
+  `volume`,`time`)를 가진 JSON **object**다. `BingX-API/api-ai-skills` 저장소의
+  `swap-market/api-reference.md`는 11-요소 positional array(및 `closeTime`,
+  quote volume, trade count, taker-buy volume 필드)를 문서화하지만, 이는
+  live 관측 및 CCXT 파싱 로직과 모두 불일치하여 이 decision에서는 채택하지
+  않는다 — 이 불일치는 Issue #44에 투명하게 기록되어 있다.
+- `limit`은 요청값 1~1000에서는 정확히 지켜지나(`limit=999`→999건 등),
+  validation은 1440까지 허용하면서도 1000 초과 요청 시 실제 반환 건수는
+  1000으로 silently capped된다(`limit=1440`→1000건). 이 client는 항상
+  `limit=1000`을 요청하고, 응답 배치 크기를 1~1000 범위로 별도 검증한다.
+- 응답의 선두 원소가 아직 마감되지 않은(forming) candle을 포함할 수 있음을
+  live로 확인했다(동일 `time`에 대해 연속 호출 간 `close` 값이 변경됨).
+  `isClosed`에 해당하는 wire 필드는 없다.
+
+제한:
+
+- private/account/position/order API mapping은 이 decision의 범위 밖이며
+  여전히 미결정이다.
+- order-write 권한을 부여하지 않는다.
+- `startTime`/`endTime` 기반 historical range query, 다른 symbol/product
+  매핑, ticker/order-book mapping은 미결정/미구현이다.
+- 배열 순서(newest-first)는 매 관측에서 일관됐으나 계약으로 보장되지
+  않는다 — wire order만 보존하며 latest/oldest 의미를 assert하지 않는다.
+- runtime/persistence/scheduler/WebSocket/live trading authority와
+  무관하다.

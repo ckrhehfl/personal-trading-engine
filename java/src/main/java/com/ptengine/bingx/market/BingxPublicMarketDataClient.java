@@ -24,16 +24,21 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * One-shot, read-only client for the public, unauthenticated BingX Swap V2 recent-trades
- * endpoint ({@code GET /openApi/swap/v2/quote/trades}) for the {@code BTC-USDT} USDT-M perpetual
- * instrument.
+ * One-shot, read-only client for public, unauthenticated BingX Swap market-data endpoints for the
+ * {@code BTC-USDT} USDT-M perpetual instrument: recent trades ({@code GET
+ * /openApi/swap/v2/quote/trades}) and 15-minute klines ({@code GET
+ * /openApi/swap/v3/quote/klines}).
  *
- * <p>{@link #fetchRecentBtcUsdtTrades()} performs exactly one HTTP GET per call: no retry,
- * backoff, polling, caching, or redirect following. The request always sends {@code
+ * <p>Each fetch method performs exactly one HTTP GET per call: no retry, backoff, polling,
+ * caching, or redirect following. The trades request always sends {@code
  * symbol=BTC-USDT&limit=1000}, but {@code limit} is a request-side upper-bound intent only &mdash;
- * this class does not trust or claim that the server honors it as a count guarantee. The response
- * array's wire order is preserved exactly as received; no sort, reverse, deduplication,
- * aggregation, or "latest trade" selection is performed anywhere in this class.
+ * this class does not trust or claim the server honors it as a count guarantee there. The klines
+ * request always sends {@code symbol=BTC-USDT&interval=15m&limit=1000}; live observation confirmed
+ * {@code limit} is honored there for requested values up to 1000, but this class still validates
+ * the actual batch size rather than trusting the request parameter. Response array wire order is
+ * preserved exactly as received; no sort, reverse, deduplication, aggregation, or "latest"
+ * selection is performed anywhere in this class. Neither fetch method claims that any returned
+ * candle is closed rather than still forming.
  *
  * <p>This class carries no credentials, no signing, no account/order authority, no scheduler or
  * runtime loop, and no persistence. It is not a market-data collection service and does not claim
@@ -42,9 +47,12 @@ import java.util.regex.Pattern;
 public final class BingxPublicMarketDataClient {
 
     private static final String REQUIRED_SCHEME = "https";
-    private static final String REQUEST_PATH = "/openApi/swap/v2/quote/trades";
-    private static final String REQUEST_QUERY = "symbol=BTC-USDT&limit=1000";
+    private static final String TRADES_REQUEST_PATH = "/openApi/swap/v2/quote/trades";
+    private static final String TRADES_REQUEST_QUERY = "symbol=BTC-USDT&limit=1000";
+    private static final String CANDLES_REQUEST_PATH = "/openApi/swap/v3/quote/klines";
+    private static final String CANDLES_REQUEST_QUERY = "symbol=BTC-USDT&interval=15m&limit=1000";
     private static final String REQUIRED_SYMBOL = "BTC-USDT";
+    private static final String REQUIRED_INTERVAL = "15m";
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
@@ -56,9 +64,14 @@ public final class BingxPublicMarketDataClient {
     private static final Pattern POSITIVE_DECIMAL_PATTERN =
             Pattern.compile("^(?:0\\.(?:0*[1-9]\\d*)|[1-9]\\d*(?:\\.\\d+)?)$");
 
+    /** Same canonical decimal shape as {@link #POSITIVE_DECIMAL_PATTERN}, but zero is also allowed. */
+    private static final Pattern NON_NEGATIVE_DECIMAL_PATTERN =
+            Pattern.compile("^(?:0(?:\\.\\d+)?|[1-9]\\d*(?:\\.\\d+)?)$");
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final URI target;
+    private final URI tradesTarget;
+    private final URI candlesTarget;
     private final Transport transport;
 
     public BingxPublicMarketDataClient(URI baseUri) {
@@ -66,7 +79,9 @@ public final class BingxPublicMarketDataClient {
     }
 
     BingxPublicMarketDataClient(URI baseUri, Transport transport) {
-        this.target = buildTargetUri(validateBaseUri(baseUri));
+        URI validatedBaseUri = validateBaseUri(baseUri);
+        this.tradesTarget = buildTargetUri(validatedBaseUri, TRADES_REQUEST_PATH, TRADES_REQUEST_QUERY);
+        this.candlesTarget = buildTargetUri(validatedBaseUri, CANDLES_REQUEST_PATH, CANDLES_REQUEST_QUERY);
         this.transport = Objects.requireNonNull(transport, "transport");
     }
 
@@ -79,6 +94,25 @@ public final class BingxPublicMarketDataClient {
      *     size, or per-trade field validation failure
      */
     public List<BingxPerpetualTrade> fetchRecentBtcUsdtTrades() {
+        byte[] body = fetch(tradesTarget);
+        return parseTradeBatch(decodeStrictUtf8(body));
+    }
+
+    /**
+     * Issues exactly one {@code GET} to {@code
+     * /openApi/swap/v3/quote/klines?symbol=BTC-USDT&interval=15m&limit=1000} and returns the
+     * response batch as an immutable, wire-order-preserving list.
+     *
+     * @throws BingxPublicMarketDataException on any transport failure, non-200 status, oversized
+     *     body, malformed/invalid JSON, envelope/business-code rejection, out-of-bounds batch
+     *     size, or per-candle field validation failure
+     */
+    public List<BingxPerpetualCandle> fetchRecentBtcUsdt15mCandles() {
+        byte[] body = fetch(candlesTarget);
+        return parseCandleBatch(decodeStrictUtf8(body));
+    }
+
+    private byte[] fetch(URI target) {
         HttpRequest request =
                 HttpRequest.newBuilder(target)
                         .GET()
@@ -107,8 +141,7 @@ public final class BingxPublicMarketDataClient {
             throw new BingxPublicMarketDataException(
                     "response body exceeds maximum size of " + MAX_RESPONSE_BYTES + " bytes");
         }
-
-        return parseBatch(decodeStrictUtf8(body));
+        return body;
     }
 
     // ------------------------------------------------------------------
@@ -145,9 +178,9 @@ public final class BingxPublicMarketDataClient {
         return baseUri;
     }
 
-    private static URI buildTargetUri(URI baseUri) {
+    private static URI buildTargetUri(URI baseUri, String path, String query) {
         try {
-            return new URI(baseUri.getScheme(), baseUri.getAuthority(), REQUEST_PATH, REQUEST_QUERY, null);
+            return new URI(baseUri.getScheme(), baseUri.getAuthority(), path, query, null);
         } catch (URISyntaxException e) {
             throw new BingxPublicMarketDataException("failed to construct the BingX request URI", e);
         }
@@ -170,7 +203,7 @@ public final class BingxPublicMarketDataClient {
         }
     }
 
-    private static List<BingxPerpetualTrade> parseBatch(String json) {
+    private static JsonNode parseEnvelope(String json) {
         JsonNode root;
         try (JsonParser parser = MAPPER.getFactory().createParser(json)) {
             root = MAPPER.readTree(parser);
@@ -212,7 +245,11 @@ public final class BingxPublicMarketDataClient {
             throw new BingxPublicMarketDataException(
                     "data must not exceed " + MAX_BATCH_SIZE + " elements, had: " + dataNode.size());
         }
+        return dataNode;
+    }
 
+    private static List<BingxPerpetualTrade> parseTradeBatch(String json) {
+        JsonNode dataNode = parseEnvelope(json);
         List<BingxPerpetualTrade> trades = new ArrayList<>(dataNode.size());
         for (JsonNode tradeNode : dataNode) {
             trades.add(parseTrade(tradeNode));
@@ -230,6 +267,29 @@ public final class BingxPublicMarketDataClient {
         BigDecimal quantity = requirePositiveDecimal(tradeNode, "qty");
         BigDecimal quoteQuantity = requirePositiveDecimal(tradeNode, "quoteQty");
         return new BingxPerpetualTrade(REQUIRED_SYMBOL, tradedAtEpochMs, buyerMaker, price, quantity, quoteQuantity);
+    }
+
+    private static List<BingxPerpetualCandle> parseCandleBatch(String json) {
+        JsonNode dataNode = parseEnvelope(json);
+        List<BingxPerpetualCandle> candles = new ArrayList<>(dataNode.size());
+        for (JsonNode candleNode : dataNode) {
+            candles.add(parseCandle(candleNode));
+        }
+        return List.copyOf(candles);
+    }
+
+    private static BingxPerpetualCandle parseCandle(JsonNode candleNode) {
+        if (!candleNode.isObject()) {
+            throw new BingxPublicMarketDataException("each candle element must be a JSON object");
+        }
+        long openTimeEpochMs = requireEpochMillis(candleNode, "time");
+        BigDecimal open = requirePositiveDecimal(candleNode, "open");
+        BigDecimal high = requirePositiveDecimal(candleNode, "high");
+        BigDecimal low = requirePositiveDecimal(candleNode, "low");
+        BigDecimal close = requirePositiveDecimal(candleNode, "close");
+        BigDecimal volume = requireNonNegativeDecimal(candleNode, "volume");
+        return new BingxPerpetualCandle(
+                REQUIRED_SYMBOL, REQUIRED_INTERVAL, openTimeEpochMs, open, high, low, close, volume);
     }
 
     private static long requireEpochMillis(JsonNode node, String field) {
@@ -271,6 +331,26 @@ public final class BingxPublicMarketDataClient {
         if (!POSITIVE_DECIMAL_PATTERN.matcher(text).matches()) {
             throw new BingxPublicMarketDataException(
                     field + " does not match the canonical positive-decimal representation: " + text);
+        }
+        return new BigDecimal(text);
+    }
+
+    private static BigDecimal requireNonNegativeDecimal(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || !value.isTextual()) {
+            throw new BingxPublicMarketDataException(field + " must be a JSON string, not a number");
+        }
+        String text = value.textValue();
+        if (text.length() > MAX_DECIMAL_LENGTH) {
+            // Never echo the raw value here: an oversized field is exactly the case where it must
+            // not be interpolated verbatim into the exception message (only its length is safe).
+            throw new BingxPublicMarketDataException(
+                    field + " exceeds maximum decimal length of " + MAX_DECIMAL_LENGTH + " characters, had: "
+                            + text.length());
+        }
+        if (!NON_NEGATIVE_DECIMAL_PATTERN.matcher(text).matches()) {
+            throw new BingxPublicMarketDataException(
+                    field + " does not match the canonical non-negative-decimal representation: " + text);
         }
         return new BigDecimal(text);
     }
