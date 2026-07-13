@@ -139,11 +139,11 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3A. MVP v0.2 항목별 상태 (Candidate 15)
+## 3A. MVP v0.2 항목별 상태 (Candidate 18)
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| BingX market data 수집 | NOT_IMPLEMENTED | `java/src`, `python/ptengine` 전체에 BingX/WebSocket/HTTP client 코드가 없다(저장소 전수 검색 결과) |
+| BingX market data 수집 | PARTIAL | Candidate 18, `com.ptengine.bingx.market.{BingxPerpetualTrade,BingxPublicMarketDataException,BingxPublicMarketDataClient}`, `BingxPublicMarketDataClientTest` — Scope: narrow. 공식 검증된 공개 unauthenticated BingX Swap V2 `GET /openApi/swap/v2/quote/trades` 엔드포인트(symbol `BTC-USDT`)에 대해 caller-invoked 단발성 GET 1회로 최근 체결 배치(1..1000건)를 읽고, HTTP status·envelope(`code`/`msg`/`data`)·배열 크기·각 trade 필드를 fail closed로 검증한 뒤 wire order를 보존하는 immutable `List`로 반환하는 production 코드가 이제 존재한다. `limit` query는 요청 의도일 뿐이며 서버가 이를 count guarantee로 지킨다고 신뢰하지 않는다(실측: `limit=1`과 `limit=1000` 모두 1000건 반환). Latest-trade 선택, chronological ordering 의미, sort/dedup/aggregation 없음. Collector/service 아님, candle 아님, persistence 없음, scheduler/runtime 없음, WebSocket 없음, retry 없음, strategy/pipeline invocation 없음(`PaperMarketSnapshot` 변환 없음), credential/private/account/order endpoint 없음, elapsed paper operation 없음 |
 | candle 저장 | NOT_IMPLEMENTED | Parquet/DuckDB/PostgreSQL 등 영속화 코드가 없다. `python/ptengine/backtest/model.py`의 `Candle`은 in-memory value type일 뿐 저장소가 아니다 |
 | Python backtest report | IMPLEMENTED_BASELINE | Candidate 16, `python/ptengine/backtest/report.py`(`BacktestReport`, `InSampleOutOfSampleBacktestReport`, `generate_backtest_report`, `generate_in_sample_out_of_sample_report`), `python/tests/backtest/test_report.py` — Scope: narrow. 이미 생성된 `BacktestResult`/`InSampleOutOfSampleResult` 값에서 파생하는 deterministic 불변 요약 모델/생성기이며, 단일 run과 IS/OOS plain-text 렌더링만 제공한다. 파일 persistence 없음, 차트/대시보드 없음, report delivery 없음, qualification score나 pass/fail gate 없음, `DeploymentManifest` 없음, runtime/live 권한 없음 |
 | Java paper runtime | NOT_IMPLEMENTED | Scheduling, 지속 실행 loop, 장시간 구동 서비스 코드가 없다. 관련 클래스들의 Javadoc이 "no runtime loop, no scheduling"을 반복해서 명시한다 |
@@ -155,7 +155,7 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3B. 전체 체크포인트 (Candidate 15)
+## 3B. 전체 체크포인트 (Candidate 18)
 
 - **MVP v0.1 foundation**: "JSON logs"를 제외한 모든 항목이
   IMPLEMENTED_BASELINE. Foundation은 실질적으로 구축되었으나, 위 표의
@@ -174,8 +174,14 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
   값의 deterministic 불변 요약 모델/생성기와 단일 run·IS/OOS plain-text
   렌더링만 제공하며, 파일 persistence·차트/대시보드·report delivery·
   qualification score/pass-fail gate·`DeploymentManifest`·runtime/live
-  권한은 없다. BingX 데이터 수집, candle 저장, Java paper runtime, Telegram
-  alert는 NOT_IMPLEMENTED다.
+  권한은 없다. BingX 데이터 수집도 Candidate 18부터 PARTIAL이나 경계가
+  narrow하다 — 공식 검증된 공개 unauthenticated `GET
+  /openApi/swap/v2/quote/trades` 엔드포인트에서 `BTC-USDT` 최근 체결 배치를
+  caller-invoked 단발성 GET으로 읽는 production 코드만 존재하며, `limit`을
+  count guarantee로 신뢰하지 않고 latest-trade 선택·ordering 의미·
+  collector/service·candle 저장·persistence·scheduler/runtime·WebSocket·
+  strategy/pipeline 연동은 없다. candle 저장, Java paper runtime, Telegram
+  alert는 여전히 NOT_IMPLEMENTED다.
   **MVP v0.2는 진행 중이며 완료가 아니다.**
 - **프로젝트 전체**: 완료되지 않았다. `COMPLETE`, `production-ready`,
   `paper-ready`, `live-ready`, `canary-ready` 중 어떤 것도 현재 상태에
@@ -190,14 +196,18 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3C. 다음 구현 게이트 (결정하지 않음, Candidate 15)
+## 3C. 다음 구현 게이트 (결정하지 않음, Candidate 18)
 
-아래는 다음 단계에서 실제로 막힐 지점을 미리 기록한다. Candidate 15는 이
-중 어느 것도 확정하지 않는다.
+아래는 다음 단계에서 실제로 막힐 지점을 미리 기록한다. Candidate 18은
+BingX BTC/USDT USDT-M perpetual의 public unauthenticated recent-trades read
+심볼(`BTC-USDT`, `docs/11_DECISION_LOG.md` D013)을 해결했을 뿐, 아래 게이트
+중 그 외 어느 것도 확정하지 않는다.
 
-- **데이터 수집/저장**: 정확한 데이터 경계(어떤 timeframe, 어떤 기간, 어떤
-  원천)와 거래소 심볼 매핑(`docs/10_OPEN_QUESTIONS_AND_RISKS.md` 항목 1)
-  증거가 먼저 필요하다.
+- **데이터 수집/저장**: 거래소 심볼 매핑은 public recent-trades read
+  경계에서만 해결되었다(`BTC-USDT`, Candidate 18/D013). candle/kline
+  timeframe, 수집 기간, authoritative candle 원천, storage backend/format,
+  continuous collector, scheduler/runtime, WebSocket 채택 여부, 다른
+  symbol/product 매핑은 여전히 미확정/미구현이다.
 - **운영 paper runtime**: position lifecycle/aggregation 경계(fill 집계,
   close/reduce, flat 표현, 재시작 복구)를 정직하게 먼저 정의해야 한다 —
   현재 baseline은 1-fill-to-1-position 투영만 증명한다.

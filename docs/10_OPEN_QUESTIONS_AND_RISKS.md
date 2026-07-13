@@ -4,10 +4,10 @@
 
 ## 1. 미확정 항목
 
-현재 미확정 항목은 다음 9개다. 현재 작업을 막지 않는 항목은 필요 시점까지 defer한다.
+현재 미확정 항목은 정확히 8개다(기존 cross-reference 안정성을 위해 item identifier
+2..9를 유지한다). 해결된 옛 항목 1은 §1A를 참고한다. 현재 작업을 막지 않는 항목은
+필요 시점까지 defer한다.
 
-1. BingX 정확한 상품 코드
-   - BTC/USDT USDT-M perpetual의 API symbol 확인 필요
 2. Position mode
    - hedge mode 또는 one-way mode
 3. Margin mode
@@ -25,6 +25,22 @@
    - Telegram / Discord / Email
 
 공유 계약 형식은 D011에서 해결되었다. MVP v0.1은 JSON Schema Draft 2020-12를 사용한다.
+
+### 1A. 해결된 항목
+
+1. BingX 정확한 상품 코드
+   - BTC/USDT USDT-M perpetual의 public read-only BingX Swap V2 recent-trades
+     endpoint(`GET /openApi/swap/v2/quote/trades`) symbol은 `BTC-USDT`다.
+   - 근거: Candidate 18 / Issue #42 / PR #43,
+     `com.ptengine.bingx.market.BingxPublicMarketDataClient`의 실측 검증, 결정
+     기록은 `docs/11_DECISION_LOG.md` D013.
+   - 해결 범위: public unauthenticated recent-trades read symbol mapping only.
+   - 미해결/미구현: 다른 symbol/product 매핑, candle/kline timeframe,
+     ticker/order-book mapping, private/account/position/order mapping,
+     order-write 권한, market-data storage/runtime/WebSocket.
+
+BingX API mapping table은 `docs/04_MVP_SCOPE_AND_ROADMAP.md` §3A/§4.1 기준으로
+여전히 PARTIAL이다. 전체 BingX API 모드가 해결됐다고 간주하지 않는다.
 
 ## 2. 나중에 결정해도 되는 것
 
@@ -117,10 +133,11 @@
 - schema validation
 - human approval gate
 
-### 4.1 기술 항목 상태 재확인 (Candidate 15)
+### 4.1 기술 항목 상태 재확인 (Candidate 18)
 
-Candidate 1–14를 거치며 아래 항목은 baseline 구현을 갖게 되었다.
-Production-complete를 의미하지 않으며, 정확한 경계는
+Candidate 1–18을 거치며 아래 항목들은 IMPLEMENTED_BASELINE과 PARTIAL이 섞인
+상태를 갖게 되었다(예: BingX API mapping table은 PARTIAL, 그 외 항목 다수는
+IMPLEMENTED_BASELINE). Production-complete를 의미하지 않으며, 정확한 경계는
 `docs/04_MVP_SCOPE_AND_ROADMAP.md`가 기준이다.
 
 - **실제 Java package 구조** — IMPLEMENTED_BASELINE:
@@ -148,8 +165,14 @@ Production-complete를 의미하지 않으며, 정확한 경계는
   `schemas/v0.1/deployment-manifest.schema.json`(Candidate 7)은 shape
   validation만 제공하며, 어떤 runtime도 이 manifest를 생성하거나 소비하지
   않는다.
-- **BingX API mapping table** — NOT_IMPLEMENTED. 정확한 API symbol
-  결정(§1 항목 1)에 종속.
+- **BingX API mapping table** — PARTIAL (Candidate 18). 현재 매핑은 정확히
+  하나다: product `BTC/USDT USDT-M perpetual` → API symbol `BTC-USDT` →
+  endpoint `/openApi/swap/v2/quote/trades` → use: public recent-trades batch
+  read (`com.ptengine.bingx.market.BingxPublicMarketDataClient`). Ordering
+  semantics(어느 원소가 최신인지)는 확립되지 않았고, `limit` query는 count
+  guarantee로 신뢰하지 않는다. 다른 symbol, candle/kline timeframe,
+  market-data storage, WebSocket, ticker/order-book mapping, private/account
+  endpoint, order mapping은 여전히 미구현/미결정이다.
 
 ### 4.2 새로 확인된 미해결 경계 (Candidate 15)
 
