@@ -78,5 +78,12 @@ public record BingxPerpetualCandle(
         if (volume.signum() < 0) {
             throw new BingxPublicMarketDataException("volume must not be negative, was: " + volume);
         }
+        if (low.compareTo(open) > 0
+                || low.compareTo(close) > 0
+                || open.compareTo(high) > 0
+                || close.compareTo(high) > 0) {
+            throw new BingxPublicMarketDataException(
+                    "OHLC values must satisfy low <= open, low <= close, open <= high, and close <= high");
+        }
     }
 }

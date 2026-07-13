@@ -408,6 +408,21 @@ class BingxPublicMarketDataClientCandleTest {
         assertFalse(thrown.getMessage().contains(tooLong));
     }
 
+    @Test
+    void fetch_rejectsInvalidOhlcRelationshipThroughParserPath() {
+        // open=4.0 > high=3.0; low/close individually valid and internally consistent with each
+        // other, so this isolates the open<=high relationship specifically. Exercises the real
+        // parseCandle()/fetchRecentBtcUsdt15mCandles() path plus the record's compact constructor,
+        // not a private helper called directly.
+        String invalidCandle = candleJson(1L, "4.0", "3.0", "1.0", "2.0", "1.0");
+        BingxPublicMarketDataClient client = clientWithResponse(ok(batchJson(invalidCandle)));
+        BingxPublicMarketDataException thrown =
+                assertThrows(BingxPublicMarketDataException.class, client::fetchRecentBtcUsdt15mCandles);
+        assertEquals(
+                "OHLC values must satisfy low <= open, low <= close, open <= high, and close <= high",
+                thrown.getMessage());
+    }
+
     // ------------------------------------------------------------------
     // direct BingxPerpetualCandle construction (compact-constructor branches)
     // ------------------------------------------------------------------
@@ -505,6 +520,136 @@ class BingxPublicMarketDataClientCandleTest {
     void candle_acceptsZeroVolume() {
         BingxPerpetualCandle candle = new BingxPerpetualCandle("BTC-USDT", "15m", 1L, ONE, ONE, ONE, ONE, BigDecimal.ZERO);
         assertEquals(BigDecimal.ZERO, candle.volume());
+    }
+
+    private static final String OHLC_INVARIANT_MESSAGE =
+            "OHLC values must satisfy low <= open, low <= close, open <= high, and close <= high";
+
+    @Test
+    void candle_rejectsLowGreaterThanOpen() {
+        // open=1.0, high=5.0, low=2.0, close=3.0: only low<=open is violated; low<=close,
+        // open<=high, and close<=high all individually hold.
+        BingxPublicMarketDataException thrown =
+                assertThrows(
+                        BingxPublicMarketDataException.class,
+                        () ->
+                                new BingxPerpetualCandle(
+                                        "BTC-USDT",
+                                        "15m",
+                                        1L,
+                                        new BigDecimal("1.0"),
+                                        new BigDecimal("5.0"),
+                                        new BigDecimal("2.0"),
+                                        new BigDecimal("3.0"),
+                                        ONE));
+        assertEquals(OHLC_INVARIANT_MESSAGE, thrown.getMessage());
+    }
+
+    @Test
+    void candle_rejectsLowGreaterThanClose() {
+        // open=3.0, high=5.0, low=2.0, close=1.0: only low<=close is violated; low<=open,
+        // open<=high, and close<=high all individually hold.
+        BingxPublicMarketDataException thrown =
+                assertThrows(
+                        BingxPublicMarketDataException.class,
+                        () ->
+                                new BingxPerpetualCandle(
+                                        "BTC-USDT",
+                                        "15m",
+                                        1L,
+                                        new BigDecimal("3.0"),
+                                        new BigDecimal("5.0"),
+                                        new BigDecimal("2.0"),
+                                        new BigDecimal("1.0"),
+                                        ONE));
+        assertEquals(OHLC_INVARIANT_MESSAGE, thrown.getMessage());
+    }
+
+    @Test
+    void candle_rejectsOpenGreaterThanHigh() {
+        // open=4.0, high=3.0, low=1.0, close=2.0: only open<=high is violated; low<=open,
+        // low<=close, and close<=high all individually hold.
+        BingxPublicMarketDataException thrown =
+                assertThrows(
+                        BingxPublicMarketDataException.class,
+                        () ->
+                                new BingxPerpetualCandle(
+                                        "BTC-USDT",
+                                        "15m",
+                                        1L,
+                                        new BigDecimal("4.0"),
+                                        new BigDecimal("3.0"),
+                                        new BigDecimal("1.0"),
+                                        new BigDecimal("2.0"),
+                                        ONE));
+        assertEquals(OHLC_INVARIANT_MESSAGE, thrown.getMessage());
+    }
+
+    @Test
+    void candle_rejectsCloseGreaterThanHigh() {
+        // open=2.0, high=3.0, low=1.0, close=4.0: only close<=high is violated; low<=open,
+        // low<=close, and open<=high all individually hold.
+        BingxPublicMarketDataException thrown =
+                assertThrows(
+                        BingxPublicMarketDataException.class,
+                        () ->
+                                new BingxPerpetualCandle(
+                                        "BTC-USDT",
+                                        "15m",
+                                        1L,
+                                        new BigDecimal("2.0"),
+                                        new BigDecimal("3.0"),
+                                        new BigDecimal("1.0"),
+                                        new BigDecimal("4.0"),
+                                        ONE));
+        assertEquals(OHLC_INVARIANT_MESSAGE, thrown.getMessage());
+    }
+
+    @Test
+    void candle_acceptsLowEqualsOpenBoundaryAcrossDifferentDecimalScales() {
+        // low=10.0 vs open=10.00: BigDecimal.equals() would treat these as unequal (different
+        // scale), so accepting this proves the invariant uses compareTo, not equals.
+        BigDecimal low = new BigDecimal("10.0");
+        BigDecimal open = new BigDecimal("10.00");
+        assertFalse(low.equals(open), "sanity check: different scale must not be equals()-equal");
+        BingxPerpetualCandle candle =
+                new BingxPerpetualCandle(
+                        "BTC-USDT", "15m", 1L, open, new BigDecimal("20.0"), low, new BigDecimal("15.0"), ONE);
+        assertEquals(low, candle.low());
+        assertEquals(open, candle.open());
+    }
+
+    @Test
+    void candle_acceptsLowEqualsCloseBoundary() {
+        BigDecimal low = new BigDecimal("2.0");
+        BigDecimal close = new BigDecimal("2.0");
+        BingxPerpetualCandle candle =
+                new BingxPerpetualCandle(
+                        "BTC-USDT", "15m", 1L, new BigDecimal("3.0"), new BigDecimal("5.0"), low, close, ONE);
+        assertEquals(low, candle.low());
+        assertEquals(close, candle.close());
+    }
+
+    @Test
+    void candle_acceptsOpenEqualsHighBoundary() {
+        BigDecimal open = new BigDecimal("5.0");
+        BigDecimal high = new BigDecimal("5.0");
+        BingxPerpetualCandle candle =
+                new BingxPerpetualCandle(
+                        "BTC-USDT", "15m", 1L, open, high, new BigDecimal("1.0"), new BigDecimal("3.0"), ONE);
+        assertEquals(open, candle.open());
+        assertEquals(high, candle.high());
+    }
+
+    @Test
+    void candle_acceptsCloseEqualsHighBoundary() {
+        BigDecimal close = new BigDecimal("5.0");
+        BigDecimal high = new BigDecimal("5.0");
+        BingxPerpetualCandle candle =
+                new BingxPerpetualCandle(
+                        "BTC-USDT", "15m", 1L, new BigDecimal("3.0"), high, new BigDecimal("1.0"), close, ONE);
+        assertEquals(close, candle.close());
+        assertEquals(high, candle.high());
     }
 
     // ------------------------------------------------------------------
