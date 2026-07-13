@@ -463,6 +463,30 @@ class BingxPublicMarketDataClientCandleTest {
                 () ->
                         new BingxPerpetualCandle(
                                 "BTC-USDT", "15m", 1L, new BigDecimal("-1.0"), ONE, ONE, ONE, ONE));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () -> new BingxPerpetualCandle("BTC-USDT", "15m", 1L, ONE, BigDecimal.ZERO, ONE, ONE, ONE));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualCandle(
+                                "BTC-USDT", "15m", 1L, ONE, new BigDecimal("-1.0"), ONE, ONE, ONE));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () -> new BingxPerpetualCandle("BTC-USDT", "15m", 1L, ONE, ONE, BigDecimal.ZERO, ONE, ONE));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualCandle(
+                                "BTC-USDT", "15m", 1L, ONE, ONE, new BigDecimal("-1.0"), ONE, ONE));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () -> new BingxPerpetualCandle("BTC-USDT", "15m", 1L, ONE, ONE, ONE, BigDecimal.ZERO, ONE));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualCandle(
+                                "BTC-USDT", "15m", 1L, ONE, ONE, ONE, new BigDecimal("-1.0"), ONE));
     }
 
     @Test

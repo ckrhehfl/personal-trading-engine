@@ -154,7 +154,7 @@ recent-trades REST read symbol은 `BTC-USDT`다.
 ## D014: BingX BTC-USDT 15m kline public market-data mapping
 
 제품 소스오브트루스(`docs/00_MASTER_SUMMARY.md` §2)가 이미 확정한 초기
-타임프레임 15m에 대해, BingX Swap V2 public unauthenticated kline REST read
+타임프레임 15m에 대해, BingX Swap V3 public unauthenticated kline REST read
 엔드포인트와 interval token을 잠근다.
 
 - endpoint: `GET /openApi/swap/v3/quote/klines`
