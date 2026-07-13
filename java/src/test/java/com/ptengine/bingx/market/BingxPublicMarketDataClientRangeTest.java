@@ -45,12 +45,29 @@ class BingxPublicMarketDataClientRangeTest {
 
     @Test
     void range_rejectsNegativeStartTime() {
-        assertRejectsArgumentsWithoutTransport(-1L, ALIGNED_START + INTERVAL);
+        // -INTERVAL (not -1) is deliberately grid-aligned and otherwise produces a valid,
+        // in-bound range: if the non-negativity guard were ever removed, every other check
+        // (alignment/ordering/width) would still pass and the exploding transport below would
+        // fire. A non-aligned negative value like -1 would be caught by the alignment check too,
+        // masking a regression in the non-negativity guard specifically.
+        assertRejectsArgumentsWithoutTransport(-INTERVAL, 0L);
     }
 
     @Test
     void range_rejectsNegativeEndTime() {
         assertRejectsArgumentsWithoutTransport(ALIGNED_START, -1L);
+    }
+
+    @Test
+    void range_acceptsZeroStartTime() {
+        // The lowest legal boundary value for the non-negativity guard, exercised as a positive
+        // (accepted) case rather than only ever appearing inside a rejected input.
+        long end = INTERVAL;
+        RecordingTransport transport = RecordingTransport.ofResponse(ok(rangeBatchJson(0L)));
+        BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
+        List<BingxPerpetualCandle> candles = client.fetchBtcUsdt15mCandlesInRange(0L, end);
+        assertEquals(1, candles.size());
+        assertEquals(0L, candles.get(0).openTimeEpochMs());
     }
 
     @Test
@@ -71,6 +88,15 @@ class BingxPublicMarketDataClientRangeTest {
     @Test
     void range_rejectsReversedBounds() {
         assertRejectsArgumentsWithoutTransport(ALIGNED_START + INTERVAL, ALIGNED_START);
+    }
+
+    @Test
+    void range_rejectsEndTimeAboveExchangeDocumentedMaximum() {
+        // 17,514,115,200,000 is the exchange's own live-confirmed absolute endTime ceiling
+        // (D015); one grid step above it must be rejected before any transport call rather than
+        // relying on the server's code=109400 rejection after a round trip.
+        long aboveCeiling = 17_514_115_200_000L + INTERVAL;
+        assertRejectsArgumentsWithoutTransport(aboveCeiling - INTERVAL, aboveCeiling);
     }
 
     @Test
@@ -100,15 +126,28 @@ class BingxPublicMarketDataClientRangeTest {
     }
 
     @Test
-    void range_acceptsExtremeAlignedValuesWithoutOverflow() {
-        // Comfortably below Long.MAX_VALUE but as large as possible while staying interval-aligned,
-        // proving the width check (subtraction-based) never overflows for extreme valid inputs.
+    void range_acceptsLargestValidValuesAtTheDocumentedCeilingWithoutOverflow() {
+        // The largest values now reachable through valid input at all, since anything above the
+        // exchange's documented endTime ceiling is rejected first: proves the width check
+        // (subtraction-based) behaves correctly right at that realistic boundary.
+        long largestValidStart = 17_514_115_200_000L - INTERVAL;
+        long largestValidEnd = 17_514_115_200_000L;
+        RecordingTransport transport = RecordingTransport.ofResponse(ok(rangeBatchJson(largestValidStart)));
+        BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
+        List<BingxPerpetualCandle> candles =
+                client.fetchBtcUsdt15mCandlesInRange(largestValidStart, largestValidEnd);
+        assertEquals(1, candles.size());
+    }
+
+    @Test
+    void range_rejectsNearLongMaxValueInputsCleanlyWithoutArithmeticOverflow() {
+        // Values this large are now caught by the endTime-ceiling check well before the
+        // width/alignment arithmetic runs, but this proves that arithmetic still degrades cleanly
+        // (a single BingxPublicMarketDataException, never an ArithmeticException or wraparound
+        // acceptance) for genuinely extreme inputs, rather than relying on the ceiling check alone.
         long hugeAlignedStart = (Long.MAX_VALUE / INTERVAL - 2) * INTERVAL;
         long hugeAlignedEnd = hugeAlignedStart + INTERVAL;
-        RecordingTransport transport = RecordingTransport.ofResponse(ok(rangeBatchJson(hugeAlignedStart)));
-        BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
-        List<BingxPerpetualCandle> candles = client.fetchBtcUsdt15mCandlesInRange(hugeAlignedStart, hugeAlignedEnd);
-        assertEquals(1, candles.size());
+        assertRejectsArgumentsWithoutTransport(hugeAlignedStart, hugeAlignedEnd);
     }
 
     @Test
@@ -282,12 +321,21 @@ class BingxPublicMarketDataClientRangeTest {
     }
 
     @Test
-    void fetch_rejectsRowAtOrAboveExclusiveUpperBound() {
+    void fetch_rejectsRowExactlyAtExclusiveUpperBound() {
         long end = ALIGNED_START + INTERVAL;
         // The row's own open time equals endTime exactly: excluded per the locked [start, end)
         // contract, so a server/fake that returns it must be rejected, not silently kept.
         String atUpperBound = candleJson(end);
         BingxPublicMarketDataClient client = clientWithResponse(ok(rangeBatchJson(atUpperBound)));
+        assertThrows(
+                BingxPublicMarketDataException.class, () -> client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, end));
+    }
+
+    @Test
+    void fetch_rejectsRowStrictlyAboveUpperBound() {
+        long end = ALIGNED_START + INTERVAL;
+        String aboveUpperBound = candleJson(end + INTERVAL);
+        BingxPublicMarketDataClient client = clientWithResponse(ok(rangeBatchJson(aboveUpperBound)));
         assertThrows(
                 BingxPublicMarketDataException.class, () -> client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, end));
     }

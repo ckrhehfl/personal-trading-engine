@@ -80,6 +80,14 @@ public final class BingxPublicMarketDataClient {
      */
     private static final long MAX_RANGE_MILLIS = (long) MAX_BATCH_SIZE * CANDLE_INTERVAL_MILLIS;
 
+    /**
+     * The server's own documented absolute ceiling on {@code endTime} (live-confirmed, D015): a
+     * request above this is rejected server-side with {@code code=109400}. Checked client-side too
+     * so an out-of-range value fails before any transport call, consistent with every other
+     * {@code validateRange} check.
+     */
+    private static final long MAX_END_TIME_EPOCH_MILLIS = 17_514_115_200_000L;
+
     /** Mirrors {@code com.ptengine.contract.json.ContractJsonCodec}'s positive-decimal pattern exactly. */
     private static final Pattern POSITIVE_DECIMAL_PATTERN =
             Pattern.compile("^(?:0\\.(?:0*[1-9]\\d*)|[1-9]\\d*(?:\\.\\d+)?)$");
@@ -194,6 +202,11 @@ public final class BingxPublicMarketDataClient {
             throw new BingxPublicMarketDataException(
                     "endTimeEpochMs must be aligned to the 15-minute candle grid (a multiple of "
                             + CANDLE_INTERVAL_MILLIS + "), was: " + endTimeEpochMs);
+        }
+        if (endTimeEpochMs > MAX_END_TIME_EPOCH_MILLIS) {
+            throw new BingxPublicMarketDataException(
+                    "endTimeEpochMs exceeds the exchange's documented maximum of "
+                            + MAX_END_TIME_EPOCH_MILLIS + ", was: " + endTimeEpochMs);
         }
         if (endTimeEpochMs <= startTimeEpochMs) {
             throw new BingxPublicMarketDataException(
