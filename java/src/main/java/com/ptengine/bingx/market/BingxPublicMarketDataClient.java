@@ -287,10 +287,24 @@ public final class BingxPublicMarketDataClient {
     record RawResponse(int statusCode, byte[] body) {}
 
     /**
-     * Reads {@code in} into a byte array, always closing it. Stops reading and closes the stream
-     * at the first byte observed beyond {@code maxBytes} instead of draining the remainder, so
-     * heap accumulation during the read is bounded by {@code maxBytes} plus at most one read
-     * buffer.
+     * Seam between {@link JdkHttpTransport} and the underlying HTTP mechanism. Production always
+     * uses the JDK {@link HttpClient} with {@link HttpResponse.BodyHandlers#ofInputStream()};
+     * tests may inject a process-local fake that never opens a socket.
+     */
+    interface StreamSender {
+
+        StreamResponse send(HttpRequest request) throws IOException, InterruptedException;
+    }
+
+    record StreamResponse(int statusCode, InputStream body) {}
+
+    /**
+     * Reads {@code in} into a byte array, always closing it. Stops consuming input as soon as a
+     * read crosses {@code maxBytes}: at most one fixed read buffer beyond the bound is ever
+     * consumed, and the remainder of an oversized stream is never drained. Response accumulation
+     * is therefore bounded as a function of {@code maxBytes}, not of the underlying stream's
+     * length &mdash; this does not claim an exact total heap-allocation figure (the accumulator's
+     * own buffer growth/copy overhead is implementation detail) or that OOM is impossible.
      */
     static byte[] readBounded(InputStream in, int maxBytes) throws IOException {
         try (InputStream stream = in) {
@@ -312,12 +326,32 @@ public final class BingxPublicMarketDataClient {
 
     static final class JdkHttpTransport implements Transport {
 
-        private final HttpClient httpClient =
-                HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).followRedirects(HttpClient.Redirect.NEVER).build();
+        private final StreamSender sender;
+
+        JdkHttpTransport() {
+            this(defaultSender());
+        }
+
+        JdkHttpTransport(StreamSender sender) {
+            this.sender = Objects.requireNonNull(sender, "sender");
+        }
+
+        private static StreamSender defaultSender() {
+            HttpClient httpClient =
+                    HttpClient.newBuilder()
+                            .connectTimeout(CONNECT_TIMEOUT)
+                            .followRedirects(HttpClient.Redirect.NEVER)
+                            .build();
+            return request -> {
+                HttpResponse<InputStream> response =
+                        httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                return new StreamResponse(response.statusCode(), response.body());
+            };
+        }
 
         @Override
         public RawResponse send(HttpRequest request) throws IOException, InterruptedException {
-            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            StreamResponse response = sender.send(request);
             byte[] body = readBounded(response.body(), MAX_RESPONSE_BYTES);
             return new RawResponse(response.statusCode(), body);
         }

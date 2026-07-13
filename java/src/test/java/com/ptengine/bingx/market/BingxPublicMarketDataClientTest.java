@@ -5,32 +5,30 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.ptengine.bingx.market.BingxPublicMarketDataClient.JdkHttpTransport;
 import com.ptengine.bingx.market.BingxPublicMarketDataClient.RawResponse;
+import com.ptengine.bingx.market.BingxPublicMarketDataClient.StreamResponse;
+import com.ptengine.bingx.market.BingxPublicMarketDataClient.StreamSender;
 import com.ptengine.bingx.market.BingxPublicMarketDataClient.Transport;
-import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.math.BigDecimal;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Test suite for {@link BingxPublicMarketDataClient}. Almost every test is fully offline: HTTP
- * interaction is intercepted by {@link RecordingTransport}, a package-private fake implementing
- * the same {@link Transport} seam the production {@code JdkHttpTransport} implements. The single
- * exception is {@code jdkHttpTransport_stopsReadingEarlyOnOversizedLoopbackResponse}, which drives
- * the real production {@code JdkHttpTransport} against a loopback-only (127.0.0.1) in-process
- * {@link HttpServer} to prove the bounded-streaming behavior at the actual transport
- * implementation, not just at the {@link BingxPublicMarketDataClient#readBounded} helper it
- * delegates to. That test never reaches the real BingX API or any external host.
+ * Fully offline, deterministic test suite for {@link BingxPublicMarketDataClient}. No test in this
+ * class opens a socket, sleeps, or reads the real clock. HTTP interaction is intercepted at one of
+ * two seams: {@link RecordingTransport} (a fake of the higher-level {@link Transport} the class
+ * accepts via its package-private constructor) for most tests, and {@link RecordingStreamSender} (a
+ * fake of the lower-level {@link StreamSender} the real production {@link JdkHttpTransport} itself
+ * accepts via its package-private constructor) for the tests that drive {@code JdkHttpTransport}
+ * directly to prove its bounded-streaming behavior without any network I/O.
  */
 class BingxPublicMarketDataClientTest {
 
@@ -562,10 +560,13 @@ class BingxPublicMarketDataClientTest {
     }
 
     // ------------------------------------------------------------------
-    // 61-68: bounded streaming (JdkHttpTransport.readBounded / JdkHttpTransport)
+    // 61-72: bounded streaming (readBounded / JdkHttpTransport / StreamSender)
     // ------------------------------------------------------------------
 
     private static final int TEST_BOUND = 1000;
+
+    /** Mirrors the production {@code MAX_RESPONSE_BYTES} constant for transport-level tests. */
+    private static final int PRODUCTION_MAX_RESPONSE_BYTES = 1_048_576;
 
     @Test
     void readBounded_acceptsExactlyMaxBytes() throws IOException {
@@ -620,58 +621,62 @@ class BingxPublicMarketDataClientTest {
     }
 
     @Test
-    void jdkHttpTransport_stopsReadingEarlyOnOversizedLoopbackResponse() throws Exception {
-        int chunkSize = 65536;
-        int chunkDelayMs = 50;
-        int totalChunks = 150;
+    void jdkHttpTransport_rejectsOversizedStreamWithoutDrainingRemainder() {
+        long farOverLength = PRODUCTION_MAX_RESPONSE_BYTES * 10L;
+        RecordingInputStream stream = new RecordingInputStream(farOverLength);
+        RecordingStreamSender sender = RecordingStreamSender.ofResponse(new StreamResponse(200, stream));
+        JdkHttpTransport transport = new JdkHttpTransport(sender);
 
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        try {
-            server.createContext(
-                    "/oversized",
-                    exchange -> {
-                        exchange.sendResponseHeaders(200, 0);
-                        try (OutputStream out = exchange.getResponseBody()) {
-                            byte[] chunk = new byte[chunkSize];
-                            for (int i = 0; i < totalChunks; i++) {
-                                out.write(chunk);
-                                out.flush();
-                                Thread.sleep(chunkDelayMs);
-                            }
-                        } catch (IOException expected) {
-                            // Expected once the client detects the overflow and closes the
-                            // connection before the server finishes writing every chunk.
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    });
-            server.start();
+        assertThrows(IOException.class, () -> transport.send(dummyRequest()));
 
-            URI uri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/oversized");
-            HttpRequest request = HttpRequest.newBuilder(uri).GET().timeout(Duration.ofSeconds(10)).build();
-            Transport transport = new BingxPublicMarketDataClient.JdkHttpTransport();
+        assertEquals(1, sender.invocationCount());
+        assertTrue(stream.isClosed());
+        assertTrue(stream.bytesServed() < farOverLength, "must not have read the full oversized stream");
+        // Bounded by the fixed 8 KiB internal read buffer: overflow is detected at most one
+        // buffer past the production limit, never anywhere close to the full stream length.
+        assertTrue(stream.bytesServed() <= PRODUCTION_MAX_RESPONSE_BYTES + 8192);
+    }
 
-            long startNanos = System.nanoTime();
-            // A transport still buffering the full response with BodyHandlers.ofByteArray()
-            // would receive a well-formed 200 response here and never throw at all; only a
-            // transport that bounds the read while streaming can detect the overflow and fail.
-            assertThrows(IOException.class, () -> transport.send(request));
-            long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+    @Test
+    void jdkHttpTransport_succeedsAtExactlyMaxResponseBytes() throws IOException, InterruptedException {
+        RecordingInputStream stream = new RecordingInputStream(PRODUCTION_MAX_RESPONSE_BYTES);
+        RecordingStreamSender sender = RecordingStreamSender.ofResponse(new StreamResponse(200, stream));
+        JdkHttpTransport transport = new JdkHttpTransport(sender);
 
-            long worstCaseFullDrainMs = (long) totalChunks * chunkDelayMs;
-            assertTrue(
-                    elapsedMs < worstCaseFullDrainMs / 2,
-                    "expected early stop well before full drain (" + worstCaseFullDrainMs + " ms), took "
-                            + elapsedMs + " ms");
-        } finally {
-            server.stop(0);
-        }
+        RawResponse response = transport.send(dummyRequest());
+
+        assertEquals(200, response.statusCode());
+        assertEquals(PRODUCTION_MAX_RESPONSE_BYTES, response.body().length);
+        assertTrue(stream.isClosed());
+        assertEquals(1, sender.invocationCount());
+    }
+
+    @Test
+    void jdkHttpTransport_propagatesSenderIoException() {
+        RecordingStreamSender sender = RecordingStreamSender.ofIoFailure(new IOException("connection reset"));
+        JdkHttpTransport transport = new JdkHttpTransport(sender);
+
+        assertThrows(IOException.class, () -> transport.send(dummyRequest()));
+        assertEquals(1, sender.invocationCount());
+    }
+
+    @Test
+    void jdkHttpTransport_propagatesSenderInterruptedException() {
+        RecordingStreamSender sender = RecordingStreamSender.ofInterruptedFailure(new InterruptedException("stopped"));
+        JdkHttpTransport transport = new JdkHttpTransport(sender);
+
+        assertThrows(InterruptedException.class, () -> transport.send(dummyRequest()));
+        assertEquals(1, sender.invocationCount());
+    }
+
+    private static HttpRequest dummyRequest() {
+        return HttpRequest.newBuilder(VALID_BASE_URI).GET().build();
     }
 
     /**
      * Fake {@link InputStream}: serves {@code totalLength} deterministically generated bytes via
      * bulk {@code read(byte[], int, int)} only, recording whether it was closed and how many
-     * bytes were actually served before the caller stopped reading.
+     * bytes were actually served before the caller stopped reading. Never opens a socket.
      */
     private static final class RecordingInputStream extends InputStream {
 
@@ -712,6 +717,54 @@ class BingxPublicMarketDataClientTest {
 
         long bytesServed() {
             return position;
+        }
+    }
+
+    /**
+     * Fake {@link StreamSender}: never opens a socket. Returns a canned {@link StreamResponse} or
+     * throws a canned {@link IOException}/{@link InterruptedException}, recording how many times
+     * it was invoked.
+     */
+    private static final class RecordingStreamSender implements StreamSender {
+
+        private final StreamResponse response;
+        private final IOException ioFailure;
+        private final InterruptedException interruptedFailure;
+        private int invocationCount;
+
+        private RecordingStreamSender(
+                StreamResponse response, IOException ioFailure, InterruptedException interruptedFailure) {
+            this.response = response;
+            this.ioFailure = ioFailure;
+            this.interruptedFailure = interruptedFailure;
+        }
+
+        static RecordingStreamSender ofResponse(StreamResponse response) {
+            return new RecordingStreamSender(response, null, null);
+        }
+
+        static RecordingStreamSender ofIoFailure(IOException e) {
+            return new RecordingStreamSender(null, e, null);
+        }
+
+        static RecordingStreamSender ofInterruptedFailure(InterruptedException e) {
+            return new RecordingStreamSender(null, null, e);
+        }
+
+        @Override
+        public StreamResponse send(HttpRequest request) throws IOException, InterruptedException {
+            invocationCount++;
+            if (ioFailure != null) {
+                throw ioFailure;
+            }
+            if (interruptedFailure != null) {
+                throw interruptedFailure;
+            }
+            return response;
+        }
+
+        int invocationCount() {
+            return invocationCount;
         }
     }
 

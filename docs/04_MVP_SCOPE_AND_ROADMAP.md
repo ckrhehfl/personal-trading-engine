@@ -196,14 +196,18 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3C. 다음 구현 게이트 (결정하지 않음, Candidate 15)
+## 3C. 다음 구현 게이트 (결정하지 않음, Candidate 18)
 
-아래는 다음 단계에서 실제로 막힐 지점을 미리 기록한다. Candidate 15는 이
-중 어느 것도 확정하지 않는다.
+아래는 다음 단계에서 실제로 막힐 지점을 미리 기록한다. Candidate 18은
+BingX BTC/USDT USDT-M perpetual의 public unauthenticated recent-trades read
+심볼(`BTC-USDT`, `docs/11_DECISION_LOG.md` D013)을 해결했을 뿐, 아래 게이트
+중 그 외 어느 것도 확정하지 않는다.
 
-- **데이터 수집/저장**: 정확한 데이터 경계(어떤 timeframe, 어떤 기간, 어떤
-  원천)와 거래소 심볼 매핑(`docs/10_OPEN_QUESTIONS_AND_RISKS.md` 항목 1)
-  증거가 먼저 필요하다.
+- **데이터 수집/저장**: 거래소 심볼 매핑은 public recent-trades read
+  경계에서만 해결되었다(`BTC-USDT`, Candidate 18/D013). candle/kline
+  timeframe, 수집 기간, authoritative candle 원천, storage backend/format,
+  continuous collector, scheduler/runtime, WebSocket 채택 여부, 다른
+  symbol/product 매핑은 여전히 미확정/미구현이다.
 - **운영 paper runtime**: position lifecycle/aggregation 경계(fill 집계,
   close/reduce, flat 표현, 재시작 복구)를 정직하게 먼저 정의해야 한다 —
   현재 baseline은 1-fill-to-1-position 투영만 증명한다.
