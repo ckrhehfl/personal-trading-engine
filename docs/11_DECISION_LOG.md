@@ -195,3 +195,86 @@ recent-trades REST read symbol은 `BTC-USDT`다.
   않는다 — wire order만 보존하며 latest/oldest 의미를 assert하지 않는다.
 - runtime/persistence/scheduler/WebSocket/live trading authority와
   무관하다.
+
+---
+
+## D015: BingX BTC-USDT 15m kline bounded historical range query semantics
+
+D014이 잠근 15m kline read symbol/interval/응답 매핑 위에서, 동일
+엔드포인트(`GET /openApi/swap/v3/quote/klines`)의 `startTime`/`endTime` query
+parameter 정확한 semantics와, 이를 안전하게 1회 GET으로 소비하기 위한
+client-side 범위 제약을 잠근다.
+
+- endpoint: `GET /openApi/swap/v3/quote/klines` (D013/D014과 동일)
+- symbol: `BTC-USDT`, interval: `15m` (변경 없음)
+- 신규 query parameter: `startTime`, `endTime` (둘 다 epoch millisecond,
+  camelCase)
+- use: read-only one-shot bounded historical kline range read 경계
+  (`com.ptengine.bingx.market.BingxPublicMarketDataClient#fetchBtcUsdt15mCandlesInRange`)
+- Candidate 20 / Issue #46에서 검증/구현되었다.
+
+근거(fresh live read-only 관측, 2026-07-13, `https://open-api.bingx.com`
+대상 약 25회 unauthenticated GET; 공식 대화형 문서는 D014과 동일하게
+JS-rendered SPA로 정적 조회 불가 재확인; CCXT `ccxt/ccxt` `bingx.py`
+`fetch_ohlcv`는 2차 corroboration으로만 사용 — 동일 parameter 이름을
+확인시켜 주나 자체적으로 방어적인 `startTime = since - 1` 보정을 적용하며,
+이는 이 decision이 채택하는 실측 inclusivity와 다르다. D014 선례와 동일하게
+CCXT는 secondary일 뿐이며 이 차이를 "docs drift"로 취급하지 않는다):
+
+- `startTime`과 `endTime`을 함께 보낼 때(이 client가 항상 사용하는 모드),
+  candle open time(`time` 필드) 기준 half-open interval
+  `startTime <= time < endTime`이 일관되게 적용된다 — `startTime`은
+  inclusive, `endTime`은 exclusive다. 8회 이상 독립적인 실측으로 경계값
+  (bucket 시작/끝, next-bucket open)까지 모순 없이 확인했다.
+- `limit`은 range filter와 별개의 추가 상한으로 작동한다. Range가 함의하는
+  candle 수가 `limit` 또는 서버 자체 1000건 상한을 넘으면, 응답은
+  `code=0`(에러 아님)을 유지한 채 **가장 최근(newest) 쪽을 남기고 가장
+  오래된(oldest) 쪽을 조용히 잘라낸다**. 1001-candle 범위에서 `limit=1000`
+  요청 시 정확히 1000건이 newest-anchored로 반환되어 가장 오래된 1건만
+  사라짐을 확인했고, 동일한 5-candle 범위를 `limit=2` vs `limit=1000`으로
+  요청해 동일한 방향의 절단을 재확인했다.
+- 서버 자체 수치 검증: `startTime`은 0 이상이어야 하며 위반 시
+  `code=109400`(`msg`가 명시적으로 위반 필드를 지목); `endTime`은
+  `17514115200000` 이하여야 하며 위반 시 동일하게 `code=109400`.
+- `startTime == endTime`(정렬/비정렬 모두)은 정당한 성공으로 빈 배열을
+  반환한다(`code=0`, `data=[]`). `startTime > endTime`은 명시적 에러
+  `code=109400`, `msg="startTime is later than endTime."`.
+- 미래 range와, 시장 데이터가 존재하기 이전(2015-01-01 UTC로 실측)의 과거
+  range 둘 다 `code=0`, `data=[]`인 정당한 빈 성공으로 확인됐다.
+- Range가 "지금"을 포함하면 아직 마감되지 않은(forming) candle이 포함될 수
+  있다 — D014과 동일하게 `isClosed`에 해당하는 wire 필드는 없다.
+- 비정렬(non-15m-grid) `startTime`/`endTime`도 서버는 그대로 받아들이며,
+  candle open time과의 단순 수치 비교로 필터링된다(bucket snapping 없음).
+
+Client-side 안전 범위 계약(거래소 자체보다 의도적으로 좁음):
+`fetchBtcUsdt15mCandlesInRange(long startTimeEpochMs, long endTimeEpochMs)`는
+두 인자 모두 0 이상이고 900,000ms(15분) grid에 정렬되어 있으며,
+`endTimeEpochMs`가 `startTimeEpochMs`보다 엄격히 크고, 그 차이가
+900,000,000ms(1000 candle) 이하일 것을 요구한다. 이 조건을 만족하지 않으면
+transport 호출 전에 fail-closed로 거부한다. 900,000,000ms 폭에서 정확히
+1000건이 절단 없이 반환됨을 실측했고, 그보다 1 candle 더 넓은 범위에서는
+가장 오래된 1건이 조용히 사라짐을 실측했다 — 두 bound 모두 grid-정렬을
+요구하는 이유는, 비정렬 입력의 동일 폭이 grid 경계를 걸쳐 최대 1001개의
+candle open을 함의할 수 있어 "무절단" 보장이 깨질 수 있기 때문이다. 이
+차이 때문에 이 client는 거래소가 실제로 허용하는 범위보다 의도적으로 좁다.
+
+빈 결과 정책: 유효하지만 결과가 없는(미래/과거-no-data) range는 이 신규
+range 메서드에서만 정당한 빈 배치로 허용한다. 기존
+`fetchRecentBtcUsdt15mCandles`/`fetchRecentBtcUsdtTrades`는 빈 `data`를
+그대로 거부하며 이 decision으로 완화되지 않는다. `startTime == endTime`,
+`startTime > endTime`은 거래소가 어떻게 응답하든 이 client가 인자 검증
+단계에서 먼저 거부한다(transport 미호출).
+
+제한:
+
+- private/account/position/order API mapping은 이 decision의 범위 밖이며
+  여전히 미결정이다.
+- order-write 권한을 부여하지 않는다.
+- Pagination, collector, historical backfill, storage, retention, gap
+  repair, scheduler, WebSocket, 다른 symbol/timeframe 매핑은 여전히
+  미결정/미구현이다 — 이 decision은 정확히 한 번의 bounded GET 경계만
+  잠근다.
+- 배열 순서(newest-first)는 매 관측에서 일관됐으나 계약으로 보장되지
+  않는다 — wire order만 보존한다.
+- runtime/persistence/scheduler/WebSocket/live trading authority와
+  무관하다.

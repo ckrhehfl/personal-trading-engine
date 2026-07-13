@@ -51,9 +51,32 @@
      반환 건수는 실제로 1000으로 capped), 응답 배열 순서(newest-first)는
      관측되었을 뿐 계약으로 보장되지 않는다. 선두 원소가 아직 마감되지 않은
      candle일 수 있다.
-   - 미해결/미구현: `startTime`/`endTime` 기반 historical range, 다른
+   - 미해결/미구현(D014 시점): `startTime`/`endTime` 기반 historical range, 다른
      symbol/product 매핑, 다른 timeframe, candle 저장, collector/scheduler,
      WebSocket, private/account/order mapping.
+
+1C. BingX BTC-USDT 15m kline bounded historical range query(`startTime`/`endTime`) semantics
+   - 1B가 잠근 동일 endpoint/symbol/interval 위에서, `startTime`/`endTime`
+     query parameter의 정확한 semantics와 안전한 1회 GET 범위 제약을 narrow하게
+     해결했다.
+   - 근거: Candidate 20 / Issue #46,
+     `com.ptengine.bingx.market.BingxPublicMarketDataClient#fetchBtcUsdt15mCandlesInRange`의
+     실측 검증, 결정 기록은 `docs/11_DECISION_LOG.md` D015.
+   - 해결 범위: 두 parameter를 함께 보낼 때(이 client가 항상 사용하는 모드)
+     candle open time 기준 half-open interval `startTime <= time < endTime`
+     (`startTime` inclusive, `endTime` exclusive). `limit`은 range filter와
+     별개의 추가 상한이며, range가 함의하는 건수가 상한을 넘으면 `code=0`을
+     유지한 채 newest 쪽을 남기고 oldest 쪽을 조용히 절단한다. 유효하지만
+     결과가 없는 range(미래, 시장 데이터 존재 이전 과거)는 이 신규 range
+     메서드에서만 정당한 빈 성공(`code=0`, `data=[]`)으로 허용된다 — 기존
+     recent-fetch 두 메서드는 빈 `data`를 여전히 거부한다. Client는
+     `startTimeEpochMs`/`endTimeEpochMs`가 900,000ms(15분) grid에 정렬되고
+     차이가 900,000,000ms(1000 candle) 이하일 것을 요구해, 서버의 silent
+     newest-anchored 절단이 애초에 발생할 수 없게 한다 — 이는 거래소 자체
+     허용 범위보다 의도적으로 좁다.
+   - 미해결/미구현: pagination, historical backfill, collector/scheduler,
+     candle 저장, retention, gap repair, WebSocket, 다른 symbol/product/
+     timeframe 매핑, private/account/order mapping.
 
 BingX API mapping table은 `docs/04_MVP_SCOPE_AND_ROADMAP.md` §3A/§4.1 기준으로
 여전히 PARTIAL이다. 전체 BingX API 모드가 해결됐다고 간주하지 않는다.
@@ -181,19 +204,23 @@ IMPLEMENTED_BASELINE). Production-complete를 의미하지 않으며, 정확한 
   `schemas/v0.1/deployment-manifest.schema.json`(Candidate 7)은 shape
   validation만 제공하며, 어떤 runtime도 이 manifest를 생성하거나 소비하지
   않는다.
-- **BingX API mapping table** — PARTIAL (Candidate 19). 현재 매핑은 정확히
-  둘이다: (1) product `BTC/USDT USDT-M perpetual` → API symbol `BTC-USDT` →
+- **BingX API mapping table** — PARTIAL (Candidate 20). 현재 매핑은 정확히
+  셋이다: (1) product `BTC/USDT USDT-M perpetual` → API symbol `BTC-USDT` →
   endpoint `/openApi/swap/v2/quote/trades` → use: public recent-trades batch
   read (`com.ptengine.bingx.market.BingxPublicMarketDataClient#fetchRecentBtcUsdtTrades`,
   Candidate 18); (2) 동일 product/symbol → endpoint
   `/openApi/swap/v3/quote/klines`(interval `15m`) → use: public 15m kline
   batch read
   (`com.ptengine.bingx.market.BingxPublicMarketDataClient#fetchRecentBtcUsdt15mCandles`,
-  Candidate 19). 두 endpoint 모두 ordering semantics(어느 원소가 최신인지)는
+  Candidate 19); (3) 동일 endpoint/symbol/interval →
+  `startTime`/`endTime`(둘 다 15분 grid 정렬, 최대 1000 candle 폭) → use:
+  public bounded historical kline range read
+  (`com.ptengine.bingx.market.BingxPublicMarketDataClient#fetchBtcUsdt15mCandlesInRange`,
+  Candidate 20). 세 endpoint 모두 ordering semantics(어느 원소가 최신인지)는
   계약으로 확립되지 않았고, `limit` query는 count guarantee로 신뢰하지
-  않는다. 다른 symbol, historical range query, candle 저장, market-data
-  storage, WebSocket, ticker/order-book mapping, private/account endpoint,
-  order mapping은 여전히 미구현/미결정이다.
+  않는다. 다른 symbol, historical backfill/pagination, candle 저장,
+  market-data storage, collector/scheduler, WebSocket, ticker/order-book
+  mapping, private/account endpoint, order mapping은 여전히 미구현/미결정이다.
 
 ### 4.2 새로 확인된 미해결 경계 (Candidate 15)
 

@@ -222,13 +222,18 @@ D013. Candidate 19에서 동일 symbol에 대해 15m kline public unauthenticate
 REST read interval token/응답 매핑(endpoint `GET
 /openApi/swap/v3/quote/klines`, interval `15m`)이 추가로 narrow하게
 해결되었다 — 근거는 `docs/10_OPEN_QUESTIONS_AND_RISKS.md` §1A(항목 1B)와
-`docs/11_DECISION_LOG.md` D014. 다른 symbol/product 매핑, historical range
-query, ticker/order-book mapping, private/account/position/order mapping,
-order-write 권한은 여전히 미구현/미결정이다.
+`docs/11_DECISION_LOG.md` D014. Candidate 20에서 동일 endpoint에 대해
+caller-supplied `startTime`/`endTime` bounded historical range query
+semantics(15분 grid 정렬, 단일 GET당 최대 1000 candle)가 추가로
+narrow하게 해결되었다 — 근거는 `docs/10_OPEN_QUESTIONS_AND_RISKS.md`
+§1A(항목 1C)와 `docs/11_DECISION_LOG.md` D015. 다른 symbol/product 매핑,
+historical backfill/pagination, ticker/order-book mapping,
+private/account/position/order mapping, order-write 권한은 여전히
+미구현/미결정이다.
 
 ---
 
-## 11. 구현 상태 체크포인트 (Candidate 19)
+## 11. 구현 상태 체크포인트 (Candidate 20)
 
 이 섹션은 이 문서를 "초기 요구사항/아키텍처 초안" 상태로 남겨두지 않기 위해
 Candidate 1–14가 실제로 `main`에 merge된 이후의 현재 국면을 요약한다.
@@ -248,10 +253,12 @@ deterministic 테스트로 뒷받침된다.
 구성요소는 모두 pure-domain이거나 caller-supplied 입력에 대한 in-process
 composition이며, 장시간 구동 runtime loop나 영속 상태에는 연결되어 있지
 않다. 유일한 예외는 `BingxPublicMarketDataClient`의 one-shot public read
-두 가지다 — Candidate 18의 recent-trades read와 Candidate 19의 15m kline
-read로, 각각 caller-invoked 단발성 GET 1회로 실제 BingX 거래소 데이터에
-연결된다. Collector/service, 지속적 수집, candle 저장, scheduler/runtime,
-WebSocket은 이 예외에도 포함되지 않으며 여전히 없다.
+세 가지다 — Candidate 18의 recent-trades read, Candidate 19의 최근 15m
+kline read, Candidate 20의 caller-supplied bounded historical 15m kline
+range read로, 각각 caller-invoked 단발성 GET 1회로 실제 BingX 거래소
+데이터에 연결된다. Pagination, collector/service, 지속적 수집, candle
+저장, scheduler/runtime, WebSocket은 이 예외에도 포함되지 않으며 여전히
+없다.
 
 **운영 gap**: continuous BingX 시세 collection, candle 저장, paper
 runtime, 스케줄링, 자격증명 처리, 재시작 복구 가능한 OMS 상태,
