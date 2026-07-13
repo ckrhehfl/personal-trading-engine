@@ -457,6 +457,15 @@ class BingxPublicMarketDataClientTest {
     // ------------------------------------------------------------------
 
     @Test
+    void trade_rejectsNullSymbol() {
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualTrade(
+                                null, 1L, true, new BigDecimal("1.0"), new BigDecimal("1.0"), new BigDecimal("1.0")));
+    }
+
+    @Test
     void trade_rejectsWrongSymbol() {
         assertThrows(
                 BingxPublicMarketDataException.class,
@@ -475,7 +484,7 @@ class BingxPublicMarketDataClientTest {
     }
 
     @Test
-    void trade_rejectsNullOrNonPositiveDecimals() {
+    void trade_rejectsNullOrNonPositivePrice() {
         assertThrows(
                 BingxPublicMarketDataException.class,
                 () -> new BingxPerpetualTrade("BTC-USDT", 1L, true, null, new BigDecimal("1.0"), new BigDecimal("1.0")));
@@ -494,6 +503,50 @@ class BingxPublicMarketDataClientTest {
                                 new BigDecimal("-1.0"),
                                 new BigDecimal("1.0"),
                                 new BigDecimal("1.0")));
+    }
+
+    @Test
+    void trade_rejectsNullOrNonPositiveQuantity() {
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () -> new BingxPerpetualTrade("BTC-USDT", 1L, true, new BigDecimal("1.0"), null, new BigDecimal("1.0")));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualTrade(
+                                "BTC-USDT", 1L, true, new BigDecimal("1.0"), BigDecimal.ZERO, new BigDecimal("1.0")));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualTrade(
+                                "BTC-USDT",
+                                1L,
+                                true,
+                                new BigDecimal("1.0"),
+                                new BigDecimal("-1.0"),
+                                new BigDecimal("1.0")));
+    }
+
+    @Test
+    void trade_rejectsNullOrNonPositiveQuoteQuantity() {
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () -> new BingxPerpetualTrade("BTC-USDT", 1L, true, new BigDecimal("1.0"), new BigDecimal("1.0"), null));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualTrade(
+                                "BTC-USDT", 1L, true, new BigDecimal("1.0"), new BigDecimal("1.0"), BigDecimal.ZERO));
+        assertThrows(
+                BingxPublicMarketDataException.class,
+                () ->
+                        new BingxPerpetualTrade(
+                                "BTC-USDT",
+                                1L,
+                                true,
+                                new BigDecimal("1.0"),
+                                new BigDecimal("1.0"),
+                                new BigDecimal("-1.0")));
     }
 
     // ------------------------------------------------------------------

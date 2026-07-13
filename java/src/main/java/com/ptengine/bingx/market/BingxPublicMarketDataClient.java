@@ -259,7 +259,14 @@ public final class BingxPublicMarketDataClient {
             throw new BingxPublicMarketDataException(field + " must be a JSON string, not a number");
         }
         String text = value.textValue();
-        if (text.length() > MAX_DECIMAL_LENGTH || !POSITIVE_DECIMAL_PATTERN.matcher(text).matches()) {
+        if (text.length() > MAX_DECIMAL_LENGTH) {
+            // Never echo the raw value here: an oversized field is exactly the case where it must
+            // not be interpolated verbatim into the exception message (only its length is safe).
+            throw new BingxPublicMarketDataException(
+                    field + " exceeds maximum decimal length of " + MAX_DECIMAL_LENGTH + " characters, had: "
+                            + text.length());
+        }
+        if (!POSITIVE_DECIMAL_PATTERN.matcher(text).matches()) {
             throw new BingxPublicMarketDataException(
                     field + " does not match the canonical positive-decimal representation: " + text);
         }
