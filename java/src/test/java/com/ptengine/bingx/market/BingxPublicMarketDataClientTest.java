@@ -447,13 +447,16 @@ class BingxPublicMarketDataClientTest {
     }
 
     @Test
-    void fetch_rejectsOverlongDecimal() {
+    void fetch_rejectsOverlongDecimalWithoutEchoingRawValueInMessage() {
         String tooLong = "1" + "0".repeat(70);
-        assertRejectsBody(batchJson(tradeJsonRawPrice(tooLong)));
+        BingxPublicMarketDataClient client = clientWithResponse(ok(batchJson(tradeJsonRawPrice(tooLong))));
+        BingxPublicMarketDataException thrown =
+                assertThrows(BingxPublicMarketDataException.class, client::fetchRecentBtcUsdtTrades);
+        assertFalse(thrown.getMessage().contains(tooLong));
     }
 
     // ------------------------------------------------------------------
-    // 58-60: direct BingxPerpetualTrade construction
+    // 58-60: direct BingxPerpetualTrade construction (all 9 compact-constructor branches)
     // ------------------------------------------------------------------
 
     @Test
