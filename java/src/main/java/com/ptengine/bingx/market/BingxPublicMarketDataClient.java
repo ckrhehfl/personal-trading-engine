@@ -316,26 +316,15 @@ public final class BingxPublicMarketDataClient {
     }
 
     private static BigDecimal requirePositiveDecimal(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        if (value == null || !value.isTextual()) {
-            throw new BingxPublicMarketDataException(field + " must be a JSON string, not a number");
-        }
-        String text = value.textValue();
-        if (text.length() > MAX_DECIMAL_LENGTH) {
-            // Never echo the raw value here: an oversized field is exactly the case where it must
-            // not be interpolated verbatim into the exception message (only its length is safe).
-            throw new BingxPublicMarketDataException(
-                    field + " exceeds maximum decimal length of " + MAX_DECIMAL_LENGTH + " characters, had: "
-                            + text.length());
-        }
-        if (!POSITIVE_DECIMAL_PATTERN.matcher(text).matches()) {
-            throw new BingxPublicMarketDataException(
-                    field + " does not match the canonical positive-decimal representation: " + text);
-        }
-        return new BigDecimal(text);
+        return requireDecimal(node, field, POSITIVE_DECIMAL_PATTERN, "positive-decimal");
     }
 
     private static BigDecimal requireNonNegativeDecimal(JsonNode node, String field) {
+        return requireDecimal(node, field, NON_NEGATIVE_DECIMAL_PATTERN, "non-negative-decimal");
+    }
+
+    private static BigDecimal requireDecimal(
+            JsonNode node, String field, Pattern pattern, String representationName) {
         JsonNode value = node.get(field);
         if (value == null || !value.isTextual()) {
             throw new BingxPublicMarketDataException(field + " must be a JSON string, not a number");
@@ -348,9 +337,9 @@ public final class BingxPublicMarketDataClient {
                     field + " exceeds maximum decimal length of " + MAX_DECIMAL_LENGTH + " characters, had: "
                             + text.length());
         }
-        if (!NON_NEGATIVE_DECIMAL_PATTERN.matcher(text).matches()) {
+        if (!pattern.matcher(text).matches()) {
             throw new BingxPublicMarketDataException(
-                    field + " does not match the canonical non-negative-decimal representation: " + text);
+                    field + " does not match the canonical " + representationName + " representation: " + text);
         }
         return new BigDecimal(text);
     }
