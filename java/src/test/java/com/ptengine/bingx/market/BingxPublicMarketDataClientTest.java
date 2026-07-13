@@ -7,21 +7,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.ptengine.bingx.market.BingxPublicMarketDataClient.RawResponse;
 import com.ptengine.bingx.market.BingxPublicMarketDataClient.Transport;
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Fully offline test suite for {@link BingxPublicMarketDataClient}. No test in this class
- * performs real network I/O; all HTTP interaction is intercepted by {@link RecordingTransport}, a
- * package-private fake implementing the same {@link Transport} seam the production {@code
- * JdkHttpTransport} implements.
+ * Test suite for {@link BingxPublicMarketDataClient}. Almost every test is fully offline: HTTP
+ * interaction is intercepted by {@link RecordingTransport}, a package-private fake implementing
+ * the same {@link Transport} seam the production {@code JdkHttpTransport} implements. The single
+ * exception is {@code jdkHttpTransport_stopsReadingEarlyOnOversizedLoopbackResponse}, which drives
+ * the real production {@code JdkHttpTransport} against a loopback-only (127.0.0.1) in-process
+ * {@link HttpServer} to prove the bounded-streaming behavior at the actual transport
+ * implementation, not just at the {@link BingxPublicMarketDataClient#readBounded} helper it
+ * delegates to. That test never reaches the real BingX API or any external host.
  */
 class BingxPublicMarketDataClientTest {
 
@@ -550,6 +559,160 @@ class BingxPublicMarketDataClientTest {
                                 new BigDecimal("1.0"),
                                 new BigDecimal("1.0"),
                                 new BigDecimal("-1.0")));
+    }
+
+    // ------------------------------------------------------------------
+    // 61-68: bounded streaming (JdkHttpTransport.readBounded / JdkHttpTransport)
+    // ------------------------------------------------------------------
+
+    private static final int TEST_BOUND = 1000;
+
+    @Test
+    void readBounded_acceptsExactlyMaxBytes() throws IOException {
+        RecordingInputStream stream = new RecordingInputStream(TEST_BOUND);
+        byte[] result = BingxPublicMarketDataClient.readBounded(stream, TEST_BOUND);
+        assertEquals(TEST_BOUND, result.length);
+        assertTrue(stream.isClosed());
+    }
+
+    @Test
+    void readBounded_rejectsOneByteOverMax() {
+        RecordingInputStream stream = new RecordingInputStream(TEST_BOUND + 1);
+        assertThrows(IOException.class, () -> BingxPublicMarketDataClient.readBounded(stream, TEST_BOUND));
+    }
+
+    @Test
+    void readBounded_doesNotDrainOversizedStreamToCompletion() {
+        long farOverLength = TEST_BOUND * 100L;
+        RecordingInputStream stream = new RecordingInputStream(farOverLength);
+        assertThrows(IOException.class, () -> BingxPublicMarketDataClient.readBounded(stream, TEST_BOUND));
+        assertTrue(stream.bytesServed() < farOverLength, "must not have read the full oversized stream");
+        // Bounded by the fixed 8 KiB internal read buffer: overflow is detected at most one
+        // buffer past the limit, never anywhere close to the full oversized stream length.
+        assertTrue(stream.bytesServed() <= TEST_BOUND + 8192);
+    }
+
+    @Test
+    void readBounded_closesStreamOnOverflow() {
+        RecordingInputStream stream = new RecordingInputStream(TEST_BOUND * 10L);
+        assertThrows(IOException.class, () -> BingxPublicMarketDataClient.readBounded(stream, TEST_BOUND));
+        assertTrue(stream.isClosed());
+    }
+
+    @Test
+    void readBounded_closesStreamOnSuccess() throws IOException {
+        RecordingInputStream stream = new RecordingInputStream(TEST_BOUND);
+        BingxPublicMarketDataClient.readBounded(stream, TEST_BOUND);
+        assertTrue(stream.isClosed());
+    }
+
+    @Test
+    void fetch_preservesBoundedReadOverflowCauseAtFetchBoundary() {
+        Transport transport =
+                request -> {
+                    BingxPublicMarketDataClient.readBounded(new RecordingInputStream(TEST_BOUND * 10L), TEST_BOUND);
+                    throw new AssertionError("unreachable: readBounded must throw before returning");
+                };
+        BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
+        BingxPublicMarketDataException thrown =
+                assertThrows(BingxPublicMarketDataException.class, client::fetchRecentBtcUsdtTrades);
+        assertTrue(thrown.getCause() instanceof IOException);
+    }
+
+    @Test
+    void jdkHttpTransport_stopsReadingEarlyOnOversizedLoopbackResponse() throws Exception {
+        int chunkSize = 65536;
+        int chunkDelayMs = 50;
+        int totalChunks = 150;
+
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        try {
+            server.createContext(
+                    "/oversized",
+                    exchange -> {
+                        exchange.sendResponseHeaders(200, 0);
+                        try (OutputStream out = exchange.getResponseBody()) {
+                            byte[] chunk = new byte[chunkSize];
+                            for (int i = 0; i < totalChunks; i++) {
+                                out.write(chunk);
+                                out.flush();
+                                Thread.sleep(chunkDelayMs);
+                            }
+                        } catch (IOException expected) {
+                            // Expected once the client detects the overflow and closes the
+                            // connection before the server finishes writing every chunk.
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    });
+            server.start();
+
+            URI uri = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/oversized");
+            HttpRequest request = HttpRequest.newBuilder(uri).GET().timeout(Duration.ofSeconds(10)).build();
+            Transport transport = new BingxPublicMarketDataClient.JdkHttpTransport();
+
+            long startNanos = System.nanoTime();
+            // A transport still buffering the full response with BodyHandlers.ofByteArray()
+            // would receive a well-formed 200 response here and never throw at all; only a
+            // transport that bounds the read while streaming can detect the overflow and fail.
+            assertThrows(IOException.class, () -> transport.send(request));
+            long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
+
+            long worstCaseFullDrainMs = (long) totalChunks * chunkDelayMs;
+            assertTrue(
+                    elapsedMs < worstCaseFullDrainMs / 2,
+                    "expected early stop well before full drain (" + worstCaseFullDrainMs + " ms), took "
+                            + elapsedMs + " ms");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * Fake {@link InputStream}: serves {@code totalLength} deterministically generated bytes via
+     * bulk {@code read(byte[], int, int)} only, recording whether it was closed and how many
+     * bytes were actually served before the caller stopped reading.
+     */
+    private static final class RecordingInputStream extends InputStream {
+
+        private final long totalLength;
+        private long position;
+        private boolean closed;
+
+        RecordingInputStream(long totalLength) {
+            this.totalLength = totalLength;
+        }
+
+        @Override
+        public int read() {
+            throw new UnsupportedOperationException("this fake only serves bulk reads");
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            if (position >= totalLength) {
+                return -1;
+            }
+            int toServe = (int) Math.min(len, totalLength - position);
+            for (int i = 0; i < toServe; i++) {
+                b[off + i] = (byte) ((position + i) % 256);
+            }
+            position += toServe;
+            return toServe;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        boolean isClosed() {
+            return closed;
+        }
+
+        long bytesServed() {
+            return position;
+        }
     }
 
     // ------------------------------------------------------------------

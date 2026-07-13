@@ -3,7 +3,9 @@ package com.ptengine.bingx.market;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -284,15 +286,40 @@ public final class BingxPublicMarketDataClient {
 
     record RawResponse(int statusCode, byte[] body) {}
 
-    private static final class JdkHttpTransport implements Transport {
+    /**
+     * Reads {@code in} into a byte array, always closing it. Stops reading and closes the stream
+     * at the first byte observed beyond {@code maxBytes} instead of draining the remainder, so
+     * heap accumulation during the read is bounded by {@code maxBytes} plus at most one read
+     * buffer.
+     */
+    static byte[] readBounded(InputStream in, int maxBytes) throws IOException {
+        try (InputStream stream = in) {
+            ByteArrayOutputStream accumulated = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            long total = 0;
+            int read;
+            while ((read = stream.read(buffer)) != -1) {
+                total += read;
+                if (total > maxBytes) {
+                    throw new IOException(
+                            "response body exceeds maximum size of " + maxBytes + " bytes during streaming read");
+                }
+                accumulated.write(buffer, 0, read);
+            }
+            return accumulated.toByteArray();
+        }
+    }
+
+    static final class JdkHttpTransport implements Transport {
 
         private final HttpClient httpClient =
                 HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).followRedirects(HttpClient.Redirect.NEVER).build();
 
         @Override
         public RawResponse send(HttpRequest request) throws IOException, InterruptedException {
-            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            return new RawResponse(response.statusCode(), response.body());
+            HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            byte[] body = readBounded(response.body(), MAX_RESPONSE_BYTES);
+            return new RawResponse(response.statusCode(), body);
         }
     }
 }

@@ -46,9 +46,9 @@ Snapshot과 supporting reference가 개별 기준 문서와 다르면 개별 기
 
 ## 4. Decision Required
 
-현재 미확정 항목은 다음 9개다.
+현재 미확정 항목은 정확히 8개다(기존 항목 번호 2..9 유지). 옛 항목 1(BingX
+정확한 API symbol)은 Candidate 18 / D013에서 해결되어 이 목록에서 제거되었다.
 
-1. BingX 정확한 API symbol
 2. Position mode
 3. Margin mode
 4. 초기 주문 정책 세부

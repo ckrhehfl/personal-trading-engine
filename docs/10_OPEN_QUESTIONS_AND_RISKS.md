@@ -4,14 +4,10 @@
 
 ## 1. 미확정 항목
 
-현재 미확정 항목은 다음 9개 중 8개다(항목 1은 Candidate 18에서 해결됨, 아래 참고). 현재 작업을 막지 않는 항목은 필요 시점까지 defer한다.
+현재 미확정 항목은 정확히 8개다(기존 cross-reference 안정성을 위해 item identifier
+2..9를 유지한다). 해결된 옛 항목 1은 §1A를 참고한다. 현재 작업을 막지 않는 항목은
+필요 시점까지 defer한다.
 
-1. BingX 정확한 상품 코드 — Candidate 18에서 해결됨
-   - BTC/USDT USDT-M perpetual API symbol은 `BTC-USDT`다. 근거: 공식 BingX Swap
-     V2 공개 unauthenticated market-data REST endpoint(`GET
-     /openApi/swap/v2/quote/trades`)와 Candidate 18의 실측 검증. 다른
-     symbol/상품 매핑, candle/kline timeframe, private/account/order endpoint
-     매핑은 여전히 미확정이다.
 2. Position mode
    - hedge mode 또는 one-way mode
 3. Margin mode
@@ -29,6 +25,22 @@
    - Telegram / Discord / Email
 
 공유 계약 형식은 D011에서 해결되었다. MVP v0.1은 JSON Schema Draft 2020-12를 사용한다.
+
+### 1A. 해결된 항목
+
+1. BingX 정확한 상품 코드
+   - BTC/USDT USDT-M perpetual의 public read-only BingX Swap V2 recent-trades
+     endpoint(`GET /openApi/swap/v2/quote/trades`) symbol은 `BTC-USDT`다.
+   - 근거: Candidate 18 / Issue #42 / PR #43,
+     `com.ptengine.bingx.market.BingxPublicMarketDataClient`의 실측 검증, 결정
+     기록은 `docs/11_DECISION_LOG.md` D013.
+   - 해결 범위: public unauthenticated recent-trades read symbol mapping only.
+   - 미해결/미구현: 다른 symbol/product 매핑, candle/kline timeframe,
+     ticker/order-book mapping, private/account/position/order mapping,
+     order-write 권한, market-data storage/runtime/WebSocket.
+
+BingX API mapping table은 `docs/04_MVP_SCOPE_AND_ROADMAP.md` §3A/§4.1 기준으로
+여전히 PARTIAL이다. 전체 BingX API 모드가 해결됐다고 간주하지 않는다.
 
 ## 2. 나중에 결정해도 되는 것
 

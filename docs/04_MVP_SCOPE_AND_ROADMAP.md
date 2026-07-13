@@ -139,7 +139,7 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3A. MVP v0.2 항목별 상태 (Candidate 15)
+## 3A. MVP v0.2 항목별 상태 (Candidate 18)
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
@@ -155,7 +155,7 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3B. 전체 체크포인트 (Candidate 15)
+## 3B. 전체 체크포인트 (Candidate 18)
 
 - **MVP v0.1 foundation**: "JSON logs"를 제외한 모든 항목이
   IMPLEMENTED_BASELINE. Foundation은 실질적으로 구축되었으나, 위 표의

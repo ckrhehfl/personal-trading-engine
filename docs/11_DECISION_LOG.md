@@ -126,3 +126,25 @@ canonical v0.1 `DeploymentManifest`는 `schemas/v0.1/deployment-manifest.schema.
   loss limit 등)이나 live flag가 없다.
 - Python manifest generator, Java manifest loader/parser, cross-language
   compatibility test는 이 decision의 범위 밖이며 이후 Candidate에서 다룬다.
+
+---
+
+## D013: BingX BTC-USDT public market-data symbol mapping
+
+초기 상품 BTC/USDT USDT-M perpetual의 BingX Swap V2 public unauthenticated
+recent-trades REST read symbol은 `BTC-USDT`다.
+
+- endpoint: `GET /openApi/swap/v2/quote/trades`
+- use: read-only recent-trades batch read 경계
+  (`com.ptengine.bingx.market.BingxPublicMarketDataClient`)
+- Candidate 18 / Issue #42 / PR #43에서 검증/구현되었다.
+
+제한:
+
+- private/account/position/order API mapping은 이 decision의 범위 밖이며
+  미결정이다.
+- order-write 권한을 부여하지 않는다.
+- candle/kline timeframe, ticker/order-book mapping은 미결정이다.
+- `limit` query에 대한 count guarantee나 배열 ordering semantics를 확정하지
+  않는다.
+- runtime/persistence/WebSocket/live trading authority와 무관하다.
