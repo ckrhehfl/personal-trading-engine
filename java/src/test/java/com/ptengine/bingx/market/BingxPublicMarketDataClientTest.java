@@ -565,9 +565,6 @@ class BingxPublicMarketDataClientTest {
 
     private static final int TEST_BOUND = 1000;
 
-    /** Mirrors the production {@code MAX_RESPONSE_BYTES} constant for transport-level tests. */
-    private static final int PRODUCTION_MAX_RESPONSE_BYTES = 1_048_576;
-
     @Test
     void readBounded_acceptsExactlyMaxBytes() throws IOException {
         RecordingInputStream stream = new RecordingInputStream(TEST_BOUND);
@@ -622,7 +619,7 @@ class BingxPublicMarketDataClientTest {
 
     @Test
     void jdkHttpTransport_rejectsOversizedStreamWithoutDrainingRemainder() {
-        long farOverLength = PRODUCTION_MAX_RESPONSE_BYTES * 10L;
+        long farOverLength = BingxPublicMarketDataClient.MAX_RESPONSE_BYTES * 10L;
         RecordingInputStream stream = new RecordingInputStream(farOverLength);
         RecordingStreamSender sender = RecordingStreamSender.ofResponse(new StreamResponse(200, stream));
         JdkHttpTransport transport = new JdkHttpTransport(sender);
@@ -634,19 +631,19 @@ class BingxPublicMarketDataClientTest {
         assertTrue(stream.bytesServed() < farOverLength, "must not have read the full oversized stream");
         // Bounded by the fixed 8 KiB internal read buffer: overflow is detected at most one
         // buffer past the production limit, never anywhere close to the full stream length.
-        assertTrue(stream.bytesServed() <= PRODUCTION_MAX_RESPONSE_BYTES + 8192);
+        assertTrue(stream.bytesServed() <= BingxPublicMarketDataClient.MAX_RESPONSE_BYTES + 8192);
     }
 
     @Test
     void jdkHttpTransport_succeedsAtExactlyMaxResponseBytes() throws IOException, InterruptedException {
-        RecordingInputStream stream = new RecordingInputStream(PRODUCTION_MAX_RESPONSE_BYTES);
+        RecordingInputStream stream = new RecordingInputStream(BingxPublicMarketDataClient.MAX_RESPONSE_BYTES);
         RecordingStreamSender sender = RecordingStreamSender.ofResponse(new StreamResponse(200, stream));
         JdkHttpTransport transport = new JdkHttpTransport(sender);
 
         RawResponse response = transport.send(dummyRequest());
 
         assertEquals(200, response.statusCode());
-        assertEquals(PRODUCTION_MAX_RESPONSE_BYTES, response.body().length);
+        assertEquals(BingxPublicMarketDataClient.MAX_RESPONSE_BYTES, response.body().length);
         assertTrue(stream.isClosed());
         assertEquals(1, sender.invocationCount());
     }

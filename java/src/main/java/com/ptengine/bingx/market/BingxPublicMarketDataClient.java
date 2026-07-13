@@ -48,7 +48,7 @@ public final class BingxPublicMarketDataClient {
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(5);
-    private static final int MAX_RESPONSE_BYTES = 1_048_576;
+    static final int MAX_RESPONSE_BYTES = 1_048_576;
     private static final int MAX_DECIMAL_LENGTH = 64;
     private static final int MAX_BATCH_SIZE = 1000;
 
