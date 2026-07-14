@@ -399,9 +399,10 @@ public final class BingxPublicMarketDataClient {
     /**
      * Same as {@link #parseCandleBatch(String)}, except empty {@code data} is a legitimate success
      * (per the locked range empty-result policy) and every parsed candle's {@code openTimeEpochMs}
-     * is independently checked against the requested {@code [startTimeEpochMs, endTimeEpochMs)}
-     * bound, failing closed &mdash; rather than silently filtering &mdash; on any row outside that
-     * bound or on a batch larger than the range could possibly contain.
+     * is independently checked against the 15-minute candle grid and the requested {@code
+     * [startTimeEpochMs, endTimeEpochMs)} bound, failing closed &mdash; rather than silently
+     * filtering &mdash; on any row that is misaligned, outside that bound, or on a batch larger
+     * than the range could possibly contain.
      */
     private static List<BingxPerpetualCandle> parseCandleRangeBatch(
             String json, long startTimeEpochMs, long endTimeEpochMs) {
@@ -415,6 +416,13 @@ public final class BingxPublicMarketDataClient {
         List<BingxPerpetualCandle> candles = new ArrayList<>(dataNode.size());
         for (JsonNode candleNode : dataNode) {
             BingxPerpetualCandle candle = parseCandle(candleNode);
+            if (candle.openTimeEpochMs() % CANDLE_INTERVAL_MILLIS != 0) {
+                throw new BingxPublicMarketDataException(
+                        "returned candle openTimeEpochMs must be aligned to the 15-minute candle grid (a multiple of "
+                                + CANDLE_INTERVAL_MILLIS
+                                + "), was: "
+                                + candle.openTimeEpochMs());
+            }
             if (candle.openTimeEpochMs() < startTimeEpochMs || candle.openTimeEpochMs() >= endTimeEpochMs) {
                 throw new BingxPublicMarketDataException(
                         "returned candle openTimeEpochMs " + candle.openTimeEpochMs()

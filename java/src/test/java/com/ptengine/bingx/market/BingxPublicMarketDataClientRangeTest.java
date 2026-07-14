@@ -349,6 +349,28 @@ class BingxPublicMarketDataClientRangeTest {
     }
 
     @Test
+    void fetch_rejectsMisalignedReturnedCandleInsideRequestedRange() {
+        // The returned candle's own open time falls inside [start, end) but is not a multiple of
+        // CANDLE_INTERVAL_MILLIS: the range-membership check alone would not catch this, so a
+        // dedicated grid-alignment check on the response must reject it before it is ever added.
+        long end = ALIGNED_START + INTERVAL;
+        long misaligned = ALIGNED_START + 1;
+        RecordingTransport transport = RecordingTransport.ofResponse(ok(rangeBatchJson(candleJson(misaligned))));
+        BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
+
+        BingxPublicMarketDataException thrown =
+                assertThrows(
+                        BingxPublicMarketDataException.class,
+                        () -> client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, end));
+
+        assertEquals(
+                "returned candle openTimeEpochMs must be aligned to the 15-minute candle grid (a multiple of "
+                        + INTERVAL + "), was: " + misaligned,
+                thrown.getMessage());
+        assertEquals(1, transport.invocationCount());
+    }
+
+    @Test
     void fetch_acceptsRowExactlyAtInclusiveLowerBound() {
         long end = ALIGNED_START + INTERVAL;
         BingxPublicMarketDataClient client = clientWithResponse(ok(rangeBatchJson(ALIGNED_START)));
