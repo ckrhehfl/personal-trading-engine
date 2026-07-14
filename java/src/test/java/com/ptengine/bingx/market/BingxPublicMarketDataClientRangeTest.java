@@ -28,8 +28,17 @@ class BingxPublicMarketDataClientRangeTest {
     private static final URI VALID_BASE_URI = URI.create("https://open-api.bingx.com");
     private static final String EXPECTED_PATH = "/openApi/swap/v3/quote/klines";
 
-    /** 15 minutes in milliseconds &mdash; the candle grid confirmed by live discovery (D015). */
-    private static final long INTERVAL = 900_000L;
+    /** Production candle-grid width (D015): sourced from the client, not duplicated as a literal. */
+    private static final long INTERVAL = BingxPublicMarketDataClient.CANDLE_INTERVAL_MILLIS;
+
+    /** Production safe-range width (D015): sourced from the client, not duplicated as a literal. */
+    private static final long MAX_RANGE = BingxPublicMarketDataClient.MAX_RANGE_MILLIS;
+
+    /**
+     * Production live-observed endTime ceiling (D015): sourced from the client, not duplicated as
+     * a literal.
+     */
+    private static final long MAX_END_TIME = BingxPublicMarketDataClient.MAX_END_TIME_EPOCH_MILLIS;
 
     /** An arbitrary but exactly-grid-aligned base time, built by construction rather than a magic literal. */
     private static final long ALIGNED_START = 2_000_000L * INTERVAL;
@@ -91,18 +100,17 @@ class BingxPublicMarketDataClientRangeTest {
     }
 
     @Test
-    void range_rejectsEndTimeAboveExchangeDocumentedMaximum() {
-        // 17,514,115,200,000 is the exchange's own live-confirmed absolute endTime ceiling
+    void range_rejectsEndTimeAboveLiveObservedMaximum() {
+        // MAX_END_TIME_EPOCH_MILLIS is the exchange's own live-observed absolute endTime ceiling
         // (D015); one grid step above it must be rejected before any transport call rather than
         // relying on the server's code=109400 rejection after a round trip.
-        long aboveCeiling = 17_514_115_200_000L + INTERVAL;
-        assertRejectsArgumentsWithoutTransport(aboveCeiling - INTERVAL, aboveCeiling);
+        assertRejectsArgumentsWithoutTransport(MAX_END_TIME, MAX_END_TIME + INTERVAL);
     }
 
     @Test
     void range_rejectsRangeExceedingSafeBound() {
-        // 1001 candles' worth: one interval beyond the verified 1000-candle safe bound.
-        assertRejectsArgumentsWithoutTransport(ALIGNED_START, ALIGNED_START + 1001 * INTERVAL);
+        // One interval beyond the verified safe bound (MAX_RANGE_MILLIS).
+        assertRejectsArgumentsWithoutTransport(ALIGNED_START, ALIGNED_START + MAX_RANGE + INTERVAL);
     }
 
     @Test
@@ -117,7 +125,7 @@ class BingxPublicMarketDataClientRangeTest {
 
     @Test
     void range_acceptsExactMaximumSafeRange() {
-        long end = ALIGNED_START + 1000 * INTERVAL;
+        long end = ALIGNED_START + MAX_RANGE;
         RecordingTransport transport = RecordingTransport.ofResponse(ok(rangeBatchJsonOfSize(ALIGNED_START, 1000)));
         BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
         List<BingxPerpetualCandle> candles = client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, end);
@@ -126,12 +134,12 @@ class BingxPublicMarketDataClientRangeTest {
     }
 
     @Test
-    void range_acceptsLargestValidValuesAtTheDocumentedCeilingWithoutOverflow() {
+    void range_acceptsLargestValidValuesAtTheLiveObservedCeilingWithoutOverflow() {
         // The largest values now reachable through valid input at all, since anything above the
-        // exchange's documented endTime ceiling is rejected first: proves the width check
+        // exchange's live-observed endTime ceiling is rejected first: proves the width check
         // (subtraction-based) behaves correctly right at that realistic boundary.
-        long largestValidStart = 17_514_115_200_000L - INTERVAL;
-        long largestValidEnd = 17_514_115_200_000L;
+        long largestValidStart = MAX_END_TIME - INTERVAL;
+        long largestValidEnd = MAX_END_TIME;
         RecordingTransport transport = RecordingTransport.ofResponse(ok(rangeBatchJson(largestValidStart)));
         BingxPublicMarketDataClient client = new BingxPublicMarketDataClient(VALID_BASE_URI, transport);
         List<BingxPerpetualCandle> candles =
@@ -165,7 +173,7 @@ class BingxPublicMarketDataClientRangeTest {
                 () -> client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, ALIGNED_START));
         assertThrows(
                 BingxPublicMarketDataException.class,
-                () -> client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, ALIGNED_START + 1001 * INTERVAL));
+                () -> client.fetchBtcUsdt15mCandlesInRange(ALIGNED_START, ALIGNED_START + MAX_RANGE + INTERVAL));
     }
 
     // ------------------------------------------------------------------

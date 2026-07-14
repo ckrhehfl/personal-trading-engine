@@ -236,6 +236,12 @@ CCXT는 secondary일 뿐이며 이 차이를 "docs drift"로 취급하지 않는
 - 서버 자체 수치 검증: `startTime`은 0 이상이어야 하며 위반 시
   `code=109400`(`msg`가 명시적으로 위반 필드를 지목); `endTime`은
   `17514115200000` 이하여야 하며 위반 시 동일하게 `code=109400`.
+  주의: 이 `17514115200000` 상한은 BingX의 공식 문서화된 계약이 아니라
+  2026-07-13 fresh 조회 시점의 live 서버 검증 동작(unauthenticated GET)에서
+  관측된 값이다 — 공식 interactive 문서는 D014과 동일하게 JS-rendered
+  SPA로 정적 접근이 불가능해 문서 대조 자체가 불가능했다. 따라서 이 값은
+  보수적인 live-observed client-side ceiling으로 취급하며, 벤더가 통보
+  없이 바꿀 수 있는, 확정된 영구 계약이 아니다.
 - `startTime == endTime`(정렬/비정렬 모두)은 정당한 성공으로 빈 배열을
   반환한다(`code=0`, `data=[]`). `startTime > endTime`은 명시적 에러
   `code=109400`, `msg="startTime is later than endTime."`.
@@ -264,6 +270,24 @@ range 메서드에서만 정당한 빈 배치로 허용한다. 기존
 그대로 거부하며 이 decision으로 완화되지 않는다. `startTime == endTime`,
 `startTime > endTime`은 거래소가 어떻게 응답하든 이 client가 인자 검증
 단계에서 먼저 거부한다(transport 미호출).
+
+향후 운영 게이트 (Candidate 20 범위 밖, 지금은 미구현):
+
+Candidate 20은 collector/runtime/logging/metrics/alerting/scheduler 권한이
+전혀 없으며, 이 decision은 주기적 재검증이나 알림을 구현하지 않는다 — 지금
+그런 모니터링이 존재한다고 주장하지 않는다. 향후 continuous collector,
+paper runtime, production-like runtime, 또는 다른 운영 배포가
+`fetchBtcUsdt15mCandlesInRange`를 사용하기 전에는 다음을 만족해야 한다:
+
+1. `MAX_END_TIME_EPOCH_MILLIS` ceiling을 fresh하게 재검증한다.
+2. 이 ceiling에 의한 거부(rejection)를 observable한 운영 이벤트로 취급한다.
+3. 향후 runtime 모니터링 정책 하에서 이를 surface/count하고 alert한다.
+4. 거래소 동작이 실제로 바뀌면, 별도로 리뷰되는 candidate를 통해서만 이
+   D015와 상수 값을 갱신한다.
+
+`MAX_RANGE_MILLIS`(1000-candle 폭 제한)가 1차 anti-truncation 방어선이므로,
+이 절대 ceiling이 stale해지더라도 즉각적인 silent range truncation 위험으로
+이어지지는 않는다 — 주로 불필요한 false rejection 위험만 늘어난다.
 
 제한:
 

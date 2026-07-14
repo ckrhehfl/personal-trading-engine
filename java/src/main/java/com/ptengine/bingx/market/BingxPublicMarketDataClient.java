@@ -71,22 +71,24 @@ public final class BingxPublicMarketDataClient {
     private static final int MAX_BATCH_SIZE = 1000;
 
     /** The 15-minute candle grid width in milliseconds; every observed candle open time is a multiple of this. */
-    private static final long CANDLE_INTERVAL_MILLIS = 900_000L;
+    static final long CANDLE_INTERVAL_MILLIS = 900_000L;
 
     /**
      * The largest {@code endTimeEpochMs - startTimeEpochMs} span guaranteed not to require more
      * than {@link #MAX_BATCH_SIZE} candles, and therefore guaranteed not to trigger the silent
      * newest-anchored truncation confirmed by live discovery (Candidate 20 / D015).
      */
-    private static final long MAX_RANGE_MILLIS = (long) MAX_BATCH_SIZE * CANDLE_INTERVAL_MILLIS;
+    static final long MAX_RANGE_MILLIS = (long) MAX_BATCH_SIZE * CANDLE_INTERVAL_MILLIS;
 
     /**
-     * The server's own documented absolute ceiling on {@code endTime} (live-confirmed, D015): a
-     * request above this is rejected server-side with {@code code=109400}. Checked client-side too
-     * so an out-of-range value fails before any transport call, consistent with every other
-     * {@code validateRange} check.
+     * The live-observed exchange ceiling on {@code endTime} (D015): a request above this was
+     * rejected server-side with {@code code=109400} during Candidate 20 live validation. This is
+     * not drawn from an official documented contract &mdash; the interactive API docs were
+     * inaccessible as a JS-rendered SPA at the time &mdash; so it is checked client-side as a
+     * conservative guard, failing before any transport call, consistent with every other {@code
+     * validateRange} check.
      */
-    private static final long MAX_END_TIME_EPOCH_MILLIS = 17_514_115_200_000L;
+    static final long MAX_END_TIME_EPOCH_MILLIS = 17_514_115_200_000L;
 
     /** Mirrors {@code com.ptengine.contract.json.ContractJsonCodec}'s positive-decimal pattern exactly. */
     private static final Pattern POSITIVE_DECIMAL_PATTERN =
@@ -205,7 +207,7 @@ public final class BingxPublicMarketDataClient {
         }
         if (endTimeEpochMs > MAX_END_TIME_EPOCH_MILLIS) {
             throw new BingxPublicMarketDataException(
-                    "endTimeEpochMs exceeds the exchange's documented maximum of "
+                    "endTimeEpochMs exceeds the live-observed exchange maximum of "
                             + MAX_END_TIME_EPOCH_MILLIS + ", was: " + endTimeEpochMs);
         }
         if (endTimeEpochMs <= startTimeEpochMs) {
