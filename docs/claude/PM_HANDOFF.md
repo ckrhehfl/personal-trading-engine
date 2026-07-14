@@ -303,12 +303,13 @@ target, incident runbook.
 
 > `docs/09_CLAUDE_WORKFLOW.md` §F.2(현재 `main` 기준 line 171)는 PreToolUse
 > policy guard hook의 알려진 한계를 "`docs/claude/PM_HANDOFF.md` §4"로
-> 인용한다. 이번 refresh는 이 문서를 요청받은 고정 섹션 구조(§7 Required
-> Document Content)로 전면 재구성했고, 그 결과 해당 내용은 이제 이
-> 섹션(예전 번호 기준 §4가 아니라 여기)에 있다. 이 refresh는 정확히
-> `docs/claude/PM_HANDOFF.md` 한 파일만 변경할 수 있어 `docs/09`의 인용
-> 번호 자체는 여기서 고치지 못한다 — 별도의 작은 docs PR에서 그 참조를
-> 갱신해야 한다. 아래 두 항목이 그 인용이 가리키던 내용이다.
+> 인용한다. 이번 refresh는 이 문서를 (저장소 문서가 아닌) 이번 refresh
+> 작업 지시가 요구한 고정 섹션 구조로 전면 재구성했고, 그 결과 해당
+> 내용은 이제 이 섹션(예전 번호 기준 §4가 아니라 여기)에 있다. 이
+> refresh는 정확히 `docs/claude/PM_HANDOFF.md` 한 파일만 변경할 수 있어
+> `docs/09`의 인용 번호 자체는 여기서 고치지 못한다 — 별도의 작은 docs
+> PR에서 그 참조를 갱신해야 한다. 아래 두 항목이 그 인용이 가리키던
+> 내용이다.
 
 - **PreToolUse hook은 완전한 shell parser가 아니다**: `.claude/hooks/policy_guard.py`는
   결정론적 패턴 매치이며 모든 우회 경로를 잡는다고 주장하지 않는다
