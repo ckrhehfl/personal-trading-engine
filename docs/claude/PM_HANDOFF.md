@@ -54,33 +54,33 @@
 
 ### A. Governance / review safety
 
-**Candidate/PR:** PR #1–#5, M1(PR #21) · **상태:** IMPLEMENTED_BASELINE(governance/CI 인프라, 로드맵 capability 아님)
+**Candidate/PR:** PR #1–#5, M1(PR #21) · **상태:** IMPLEMENTED_BASELINE
 governance bootstrap, deterministic `security-gates`(`.github/workflows/security-gates.yml`, `scripts/ci/security_gates.py`), Claude operating model/handoff 정의, read-only reviewer subagent 5개(`.claude/agents/*.md`), reviewer skill 5개 + PreToolUse policy guard(`.claude/hooks/policy_guard.py`), merge-gate self-test(`tests/ci/test_security_gates.py`, `tests/claude/test_policy_guard.py`).
-**경계:** defense-in-depth 계층일 뿐 OS-level sandbox가 아니다. reviewer auto-routing과 second-AI-reviewer 자동 enforcement는 아직 없다(사람이 수동으로 호출).
+**경계:** 이 그룹은 로드맵 product capability가 아니라 governance/CI 인프라다. defense-in-depth 계층일 뿐 OS-level sandbox가 아니다. reviewer auto-routing과 second-AI-reviewer 자동 enforcement는 아직 없다(사람이 수동으로 호출).
 
 ### B. Contracts / deployment shape
 
 **Candidate/PR:** 1(#6) IMPLEMENTED_BASELINE, 5(#15) **PARTIAL**, 7(#19) IMPLEMENTED_BASELINE · D011, D012
 `schemas/v0.1/{common,order-intent,risk-decision,deployment-manifest}.schema.json`, `tests/schemas/fixtures/**`, Java `com.ptengine.contract.json.ContractJsonCodec` + `SharedFixtureCompatibilityTest`.
-**경계:** Candidate 5는 JSON-boundary fixture 호환성만 증명한다 — 코드 자체 Javadoc이 "전체 backtest ↔ Java trading-path 행위 동등성을 증명하지 않는다"고 명시하므로 PARTIAL(`docs/04_MVP_SCOPE_AND_ROADMAP.md` §1B와 동일 라벨). 그 외 공통 경계: generated model 없음, manifest generator(Python)/loader(Java) 없음, artifact existence/checksum 증명 없음, 어떤 runtime도 아직 deployment manifest를 생성/소비하지 않으며 실행 authorization도 아니다.
+**경계:** Candidate 5는 JSON-boundary fixture 호환성만 증명한다 — 코드 자체 Javadoc이 "전체 backtest ↔ Java trading-path 행위 동등성을 증명하지 않는다"고 명시하므로 PARTIAL 라벨이다(`docs/04_MVP_SCOPE_AND_ROADMAP.md` §1B와 동일). 그 외 공통 경계: generated model 없음, manifest generator(Python)/loader(Java) 없음, artifact existence/checksum 증명 없음, 어떤 runtime도 아직 deployment manifest를 생성/소비하지 않으며 실행 authorization도 아니다.
 
 ### C. OMS / Risk / Paper composition
 
-**Candidate/PR:** 2(#9), 3(#11), 6(#17), 8(#23) · **상태:** IMPLEMENTED_BASELINE(narrow)
+**Candidate/PR:** 2(#9), 3(#11), 6(#17), 8(#23) · **상태:** IMPLEMENTED_BASELINE
 `com.ptengine.oms.{OrderState,Order,OrderRegistry,OrderTransitions}`, `com.ptengine.risk.{RiskGateway,RiskDecision,RiskRule,RiskRejectReason}`(fail-closed pure-domain aggregator), `com.ptengine.paper.PaperBroker`, `com.ptengine.integration.PaperOrderPipeline`(실제 Risk→OMS→Paper in-process composition, PASS 우회 없음).
-**경계:** 장시간 구동 runtime 없음, 영속 OMS 없음, 동시성 보장 없음, production numeric risk rule(leverage/notional/exposure/loss-limit) 없음. `PaperOrderPipeline` Javadoc 자체가 "다른 호출자가 컴포넌트를 직접 호출하는 것이 불가능하다고 주장하지 않는다"고 명시.
+**경계:** narrow — 장시간 구동 runtime 없음, 영속 OMS 없음, 동시성 보장 없음, production numeric risk rule(leverage/notional/exposure/loss-limit) 없음. `PaperOrderPipeline` Javadoc 자체가 "다른 호출자가 컴포넌트를 직접 호출하는 것이 불가능하다고 주장하지 않는다"고 명시.
 
 ### D. Position / reconciliation
 
-**Candidate/PR:** 9(#25), 10(#27), 11(#29), 17(#41) · **상태:** IMPLEMENTED_BASELINE(narrow) / 11은 PARTIAL(test-only)
+**Candidate/PR:** 9(#25), 10(#27), 11(#29), 17(#41) · **상태:** Candidates 9/10/17 = IMPLEMENTED_BASELINE; Candidate 11 = PARTIAL
 `com.ptengine.reconciliation.{PositionSnapshot,PositionReconciler,PaperExecutionPositionProjector,PaperExecutionPositionReconciliationCoordinator}`, `PaperOrderPositionReconciliationIntegrationTest`(Javadoc: "Integration-only proof... Adds no production code").
-**경계:** 포지션 ledger 없음, position lifecycle(open→update→close/reduce/flat) 표현 없음, fill 집계(다건 fill 합산) 없음, authoritative exchange/account 원천 없음, tolerance/staleness policy 없음, continuous reconciliation service 없음.
+**경계:** narrow. Candidate 11은 test-only integration proof이며 신규 production 코드를 추가하지 않는다(Javadoc 명시) — 그래서 별도로 PARTIAL. 포지션 ledger 없음, position lifecycle(open→update→close/reduce/flat) 표현 없음, fill 집계(다건 fill 합산) 없음, authoritative exchange/account 원천 없음, tolerance/staleness policy 없음, continuous reconciliation service 없음.
 
 ### E. Research / reporting
 
-**Candidate/PR:** 4(#13), 12(#31), 14(#35), 16(#39) · **상태:** IMPLEMENTED_BASELINE(narrow)
+**Candidate/PR:** 4(#13), 12(#31), 14(#35), 16(#39) · **상태:** IMPLEMENTED_BASELINE
 `python/ptengine/backtest/{model,engine,strategy,evaluation,report}.py`(deterministic next-bar-open engine, IS/OOS 분리, `BacktestReport`/`InSampleOutOfSampleBacktestReport`), `com.ptengine.report.{DailyPaperTradingReport,DailyPaperTradingReportGenerator}`(exact invariant 10개 포함).
-**경계:** 데이터 수집/영속화 없음, 차트/대시보드 없음, report/alert delivery 없음, qualification score나 pass/fail gate 없음, scheduler 없음.
+**경계:** narrow — 데이터 수집/영속화 없음, 차트/대시보드 없음, report/alert delivery 없음, qualification score나 pass/fail gate 없음, scheduler 없음.
 
 ### F. Cross-language evidence
 
@@ -90,9 +90,9 @@ governance bootstrap, deterministic `security-gates`(`.github/workflows/security
 
 ### G. Status reconciliation
 
-**Candidate/PR:** 15(#37) · **상태:** IMPLEMENTED_BASELINE(governance 산출물)
+**Candidate/PR:** 15(#37) · **상태:** IMPLEMENTED_BASELINE
 `docs/04_MVP_SCOPE_AND_ROADMAP.md` §1A에 정의된 4-label(IMPLEMENTED_BASELINE/PARTIAL/NOT_IMPLEMENTED/DECISION_REQUIRED) 상태 어휘 도입, Candidate 1–14 evidence 재감사.
-**경계:** 이 자체는 신규 product capability가 아니라 문서/audit 산출물이다.
+**경계:** 이 자체는 신규 product capability가 아니라 governance/문서 산출물이다.
 
 ### H. BingX public market data
 
@@ -131,8 +131,8 @@ rule · kill switch · alert renderer/transport · private/account/position/
 order BingX API · 자격증명/서명 · order placement · paper qualification ·
 canary/live runtime
 
-**DECISION_REQUIRED (정확히 8개, `docs/10_OPEN_QUESTIONS_AND_RISKS.md` §1
-item 2–9)**
+**DECISION_REQUIRED** — 정확히 8개, `docs/10_OPEN_QUESTIONS_AND_RISKS.md` §1
+item 2–9
 2. Position mode(hedge/one-way) · 3. Margin mode(isolated 우선 검토) · 4.
 초기 주문 정책 세부 · 5. 손절/익절 방식 · 6. Java strategy runtime 범위 ·
 7. 백테스트↔Java trading path 일치성 검증 방법 · 8. VPS 위치/네트워크
@@ -168,6 +168,21 @@ restart 복구 · multi-fill/position lifecycle · authoritative exchange/
 account reconciliation · production numeric risk rule · kill switch ·
 alert/report delivery · 경과한 paper 운영 · private/order API · canary/live
 운영.
+
+### 4.1 Tooling guardrail compatibility note
+
+`docs/09_CLAUDE_WORKFLOW.md` §F.2는 알려진 hook 한계를 이 문서 §4에서
+확인하도록 가리킨다:
+
+- PreToolUse hook(`.claude/hooks/policy_guard.py`)은 완전한 shell parser가
+  아니다 — 결정론적 pattern matcher이며 모든 우회 경로를 잡는다고 주장하지
+  않는다.
+- PreToolUse detector와 CI `security-gates` detector 사이 일부 parity
+  gap이 있다.
+- 두 계층은 서로 대체 관계가 아니다 — pre-execution/pre-merge 시점에
+  독립적으로 동작한다.
+- reviewer auto-routing과 second-AI-reviewer 자동 enforcement는 아직
+  없다.
 
 ---
 
@@ -301,24 +316,12 @@ target, incident runbook.
 
 ## 6. Known risks and technical debt
 
-> `docs/09_CLAUDE_WORKFLOW.md` §F.2(현재 `main` 기준 line 171)는 PreToolUse
-> policy guard hook의 알려진 한계를 "`docs/claude/PM_HANDOFF.md` §4"로
-> 인용한다. 이번 refresh는 이 문서를 (저장소 문서가 아닌) 이번 refresh
-> 작업 지시가 요구한 고정 섹션 구조로 전면 재구성했고, 그 결과 해당
-> 내용은 이제 이 섹션(예전 번호 기준 §4가 아니라 여기)에 있다. 이
-> refresh는 정확히 `docs/claude/PM_HANDOFF.md` 한 파일만 변경할 수 있어
-> `docs/09`의 인용 번호 자체는 여기서 고치지 못한다 — 별도의 작은 docs
-> PR에서 그 참조를 갱신해야 한다. 아래 두 항목이 그 인용이 가리키던
-> 내용이다.
+> `docs/09_CLAUDE_WORKFLOW.md` §F.2의 `PM_HANDOFF.md §4` 참조는 §4.1에서
+> 의도적으로 유지한다. 아래 항목은 같은 tooling 한계를 broader risk
+> context에서 다시 요약한다.
 
-- **PreToolUse hook은 완전한 shell parser가 아니다**: `.claude/hooks/policy_guard.py`는
-  결정론적 패턴 매치이며 모든 우회 경로를 잡는다고 주장하지 않는다
-  (`docs/09_CLAUDE_WORKFLOW.md` §F.2).
-- **PreToolUse detector와 CI(`security-gates`) detector 사이 일부 parity
-  gap**이 있다 — 두 layer는 서로 다른 시점(pre-execution vs pre-merge)에
-  독립적으로 동작하며 하나가 다른 하나를 대체하지 않는다. reviewer
-  auto-routing과 second-AI-reviewer 자동 enforcement도 아직 없다(§2 Group
-  A와 동일 사실).
+- PreToolUse hook/CI detector 한계(shell parser 불완전, parity gap): §4.1
+  참고.
 - D013–D015는 narrow live-observation 기반 public-read 결정이다. 벤더
   동작이 통보 없이 바뀔 수 있다.
 - D015의 `MAX_END_TIME_EPOCH_MILLIS` ceiling은 향후 continuous/
