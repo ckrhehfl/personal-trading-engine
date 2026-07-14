@@ -139,11 +139,11 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3A. MVP v0.2 항목별 상태 (Candidate 19)
+## 3A. MVP v0.2 항목별 상태 (Candidate 20)
 
 | 항목 | 상태 | 근거 |
 |---|---|---|
-| BingX market data 수집 | PARTIAL | Candidate 18/19, `com.ptengine.bingx.market.{BingxPerpetualTrade,BingxPerpetualCandle,BingxPublicMarketDataException,BingxPublicMarketDataClient}`, `BingxPublicMarketDataClientTest`, `BingxPublicMarketDataClientCandleTest` — Scope: narrow. 공식 검증된 공개 unauthenticated BingX Swap 엔드포인트 둘에 대해 caller-invoked 단발성 GET 1회 read가 존재한다: (1) `GET /openApi/swap/v2/quote/trades`(symbol `BTC-USDT`)로 최근 체결 배치(1..1000건), (2) `GET /openApi/swap/v3/quote/klines`(symbol `BTC-USDT`, interval `15m`)로 15분봉 캔들 배치(1..1000건). 두 경로 모두 HTTP status·envelope(`code`/`msg`/`data`)·배열 크기·각 원소 필드를 fail closed로 검증한 뒤 wire order를 보존하는 immutable `List`로 반환한다. `limit` query는 요청 의도일 뿐이며 서버가 이를 count guarantee로 지킨다고 신뢰하지 않는다(trades 실측: `limit=1`과 `limit=1000` 모두 1000건 반환; klines 실측: 1~1000은 정확히 지켜지나 1000 초과 요청은 실제로 1000건으로 capped됨). Latest-candle/latest-trade 선택, chronological ordering 의미, closed-candle 여부, sort/dedup/aggregation 없음. Collector/service 아님, candle 저장 아님, persistence 없음, scheduler/runtime 없음, WebSocket 없음, retry 없음, strategy/pipeline invocation 없음(`PaperMarketSnapshot` 변환 없음), credential/private/account/order endpoint 없음, elapsed paper operation 없음 |
+| BingX market data 수집 | PARTIAL | Candidate 18/19/20, `com.ptengine.bingx.market.{BingxPerpetualTrade,BingxPerpetualCandle,BingxPublicMarketDataException,BingxPublicMarketDataClient}`, `BingxPublicMarketDataClientTest`, `BingxPublicMarketDataClientCandleTest`, `BingxPublicMarketDataClientRangeTest` — Scope: narrow. 공식 검증된 공개 unauthenticated BingX Swap 엔드포인트에 대해 caller-invoked 단발성 GET 1회 read가 세 가지 존재한다: (1) `GET /openApi/swap/v2/quote/trades`(symbol `BTC-USDT`)로 최근 체결 배치(1..1000건), (2) `GET /openApi/swap/v3/quote/klines`(symbol `BTC-USDT`, interval `15m`)로 최근 15분봉 캔들 배치(1..1000건), (3) 동일 endpoint에 `startTime`/`endTime`(15분 grid 정렬, 최대 1000 candle 폭)을 더해 caller-supplied bounded historical 15분봉 range 배치(0..1000건, 유효한 빈 배치 허용)를 읽는다. 세 경로 모두 HTTP status·envelope(`code`/`msg`/`data`)·배열 크기·각 원소 필드를 fail closed로 검증한 뒤 wire order를 보존하는 immutable `List`로 반환한다. `limit` query는 요청 의도일 뿐이며 서버가 이를 count guarantee로 지킨다고 신뢰하지 않는다(trades 실측: `limit=1`과 `limit=1000` 모두 1000건 반환; klines 실측: 1~1000은 정확히 지켜지나 1000 초과 요청은 실제로 1000건으로 capped됨; range 실측: range가 함의하는 건수가 상한을 넘으면 newest 쪽을 남기고 oldest 쪽을 조용히 절단함 — 이 client는 grid 정렬 + 1000 candle 폭 상한으로 이 절단 자체를 도달 불가능하게 만든다). Latest-candle/latest-trade 선택, chronological ordering 의미, closed-candle 여부, sort/dedup/aggregation 없음. Collector/service 아님, candle 저장 아님, persistence 없음, scheduler/runtime 없음, WebSocket 없음, retry/pagination 없음, strategy/pipeline invocation 없음(`PaperMarketSnapshot` 변환 없음), credential/private/account/order endpoint 없음, elapsed paper operation 없음 |
 | candle 저장 | NOT_IMPLEMENTED | Parquet/DuckDB/PostgreSQL 등 영속화 코드가 없다. `python/ptengine/backtest/model.py`의 `Candle`은 in-memory value type일 뿐 저장소가 아니다 |
 | Python backtest report | IMPLEMENTED_BASELINE | Candidate 16, `python/ptengine/backtest/report.py`(`BacktestReport`, `InSampleOutOfSampleBacktestReport`, `generate_backtest_report`, `generate_in_sample_out_of_sample_report`), `python/tests/backtest/test_report.py` — Scope: narrow. 이미 생성된 `BacktestResult`/`InSampleOutOfSampleResult` 값에서 파생하는 deterministic 불변 요약 모델/생성기이며, 단일 run과 IS/OOS plain-text 렌더링만 제공한다. 파일 persistence 없음, 차트/대시보드 없음, report delivery 없음, qualification score나 pass/fail gate 없음, `DeploymentManifest` 없음, runtime/live 권한 없음 |
 | Java paper runtime | NOT_IMPLEMENTED | Scheduling, 지속 실행 loop, 장시간 구동 서비스 코드가 없다. 관련 클래스들의 Javadoc이 "no runtime loop, no scheduling"을 반복해서 명시한다 |
@@ -155,7 +155,7 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3B. 전체 체크포인트 (Candidate 19)
+## 3B. 전체 체크포인트 (Candidate 20)
 
 - **MVP v0.1 foundation**: "JSON logs"를 제외한 모든 항목이
   IMPLEMENTED_BASELINE. Foundation은 실질적으로 구축되었으나, 위 표의
@@ -174,16 +174,18 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
   값의 deterministic 불변 요약 모델/생성기와 단일 run·IS/OOS plain-text
   렌더링만 제공하며, 파일 persistence·차트/대시보드·report delivery·
   qualification score/pass-fail gate·`DeploymentManifest`·runtime/live
-  권한은 없다. BingX 데이터 수집도 Candidate 18/19부터 PARTIAL이나 경계가
-  narrow하다 — 공식 검증된 공개 unauthenticated 엔드포인트 두 개(`GET
-  /openApi/swap/v2/quote/trades`의 `BTC-USDT` 최근 체결 배치, `GET
-  /openApi/swap/v3/quote/klines`의 `BTC-USDT` 15m 캔들 배치)를
-  caller-invoked 단발성 GET으로 읽는 production 코드만 존재하며, `limit`을
-  count guarantee로 신뢰하지 않고 latest-trade/latest-candle 선택·ordering
-  의미·closed-candle 여부·collector/service·candle 저장·persistence·
-  scheduler/runtime·WebSocket·strategy/pipeline 연동은 없다. candle 저장,
-  Java paper runtime, Telegram alert는 여전히 NOT_IMPLEMENTED다.
-  **MVP v0.2는 진행 중이며 완료가 아니다.**
+  권한은 없다. BingX 데이터 수집도 Candidate 18/19/20부터 PARTIAL이나 경계가
+  narrow하다 — 공식 검증된 공개 unauthenticated 엔드포인트 사용 경로 세
+  가지(`GET /openApi/swap/v2/quote/trades`의 `BTC-USDT` 최근 체결 배치,
+  `GET /openApi/swap/v3/quote/klines`의 `BTC-USDT` 최근 15m 캔들 배치, 동일
+  endpoint에 15분 grid 정렬된 `startTime`/`endTime`(최대 1000 candle 폭)을
+  더한 caller-supplied bounded historical 15m range 배치)를 caller-invoked
+  단발성 GET으로 읽는 production 코드만 존재하며, `limit`을 count
+  guarantee로 신뢰하지 않고 latest-trade/latest-candle 선택·ordering
+  의미·closed-candle 여부·pagination·collector/service·candle 저장·
+  persistence·scheduler/runtime·WebSocket·strategy/pipeline 연동은 없다.
+  candle 저장, Java paper runtime, Telegram alert는 여전히
+  NOT_IMPLEMENTED다. **MVP v0.2는 진행 중이며 완료가 아니다.**
 - **프로젝트 전체**: 완료되지 않았다. `COMPLETE`, `production-ready`,
   `paper-ready`, `live-ready`, `canary-ready` 중 어떤 것도 현재 상태에
   해당하지 않는다.
@@ -197,26 +199,30 @@ MVP v0.1 foundation은 "JSON logs" 한 항목을 제외하고 실질적으로
 
 ---
 
-## 3C. 다음 구현 게이트 (결정하지 않음, Candidate 19)
+## 3C. 다음 구현 게이트 (결정하지 않음, Candidate 20)
 
 아래는 다음 단계에서 실제로 막힐 지점을 미리 기록한다. Candidate 18은
 BingX BTC/USDT USDT-M perpetual의 public unauthenticated recent-trades read
 심볼(`BTC-USDT`, `docs/11_DECISION_LOG.md` D013)을 해결했고, Candidate 19는
 그 위에 15m kline read의 정확한 BingX API interval token과 응답 매핑만을
-narrow하게 해결했다(`docs/11_DECISION_LOG.md` D014). 전략 타임프레임
-자체는 이미 `docs/00_MASTER_SUMMARY.md` §2에서 15m 기본으로 확정되어
-있었다 — Candidate 19가 새로 만든 결정은 "그 15m을 어떤 정확한 BingX
-endpoint/interval token/응답 필드로 읽는가"이지, 타임프레임 선택 자체가
-아니다. 아래 게이트 중 그 외 어느 것도 확정하지 않는다.
+narrow하게 해결했으며(`docs/11_DECISION_LOG.md` D014), Candidate 20은 같은
+endpoint의 `startTime`/`endTime` bounded historical range query semantics와
+안전한 1회 GET 범위 제약만을 narrow하게 추가로 해결했다
+(`docs/11_DECISION_LOG.md` D015). 전략 타임프레임 자체는 이미
+`docs/00_MASTER_SUMMARY.md` §2에서 15m 기본으로 확정되어 있었다 —
+Candidate 20이 새로 만든 결정은 "그 15m kline을 caller-supplied 범위로 어떻게
+안전하게 1회 GET으로 읽는가"이지, 타임프레임 선택이나 데이터 수집/저장
+전략 자체가 아니다. 아래 게이트 중 그 외 어느 것도 확정하지 않는다.
 
 - **데이터 수집/저장**: 거래소 심볼 매핑은 public recent-trades read
   경계에서 해결되었고(`BTC-USDT`, Candidate 18/D013), 15m kline interval
-  token/응답 매핑도 public one-shot read 경계에서 narrow하게 해결되었다
-  (`15m`, Candidate 19/D014). 수집 기간(historical range/`startTime`·
-  `endTime` 사용), authoritative candle 원천(예: mark price kline과의
-  관계), storage backend/format, continuous collector, scheduler/runtime,
-  WebSocket 채택 여부, 다른 symbol/product 매핑, 다른 timeframe(5m/1h)은
-  여전히 미확정/미구현이다.
+  token/응답 매핑도 public one-shot read 경계에서 narrow하게 해결되었으며
+  (`15m`, Candidate 19/D014), bounded historical range query semantics(단일
+  GET당 최대 1000 candle, grid 정렬 요구)도 narrow하게 해결되었다
+  (Candidate 20/D015). Pagination/자동 backfill, authoritative candle
+  원천(예: mark price kline과의 관계), storage backend/format, continuous
+  collector, scheduler/runtime, WebSocket 채택 여부, 다른 symbol/product
+  매핑, 다른 timeframe(5m/1h)은 여전히 미확정/미구현이다.
 - **운영 paper runtime**: position lifecycle/aggregation 경계(fill 집계,
   close/reduce, flat 표현, 재시작 복구)를 정직하게 먼저 정의해야 한다 —
   현재 baseline은 1-fill-to-1-position 투영만 증명한다.

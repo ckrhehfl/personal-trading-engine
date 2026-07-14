@@ -26,19 +26,29 @@ import java.util.regex.Pattern;
 /**
  * One-shot, read-only client for public, unauthenticated BingX Swap market-data endpoints for the
  * {@code BTC-USDT} USDT-M perpetual instrument: recent trades ({@code GET
- * /openApi/swap/v2/quote/trades}) and 15-minute klines ({@code GET
- * /openApi/swap/v3/quote/klines}).
+ * /openApi/swap/v2/quote/trades}), recent 15-minute klines, and one caller-supplied, bounded
+ * historical 15-minute kline range (both {@code GET /openApi/swap/v3/quote/klines}).
  *
  * <p>Each fetch method performs exactly one HTTP GET per call: no retry, backoff, polling,
  * caching, or redirect following. The trades request always sends {@code
  * symbol=BTC-USDT&limit=1000}, but {@code limit} is a request-side upper-bound intent only &mdash;
- * this class does not trust or claim the server honors it as a count guarantee there. The klines
- * request always sends {@code symbol=BTC-USDT&interval=15m&limit=1000}; live observation confirmed
- * {@code limit} is honored there for requested values up to 1000, but this class still validates
- * the actual batch size rather than trusting the request parameter. Response array wire order is
- * preserved exactly as received; no sort, reverse, deduplication, aggregation, or "latest"
- * selection is performed anywhere in this class. Neither fetch method claims that any returned
- * candle is closed rather than still forming.
+ * this class does not trust or claim the server honors it as a count guarantee there. The recent
+ * klines request always sends {@code symbol=BTC-USDT&interval=15m&limit=1000}; live observation
+ * confirmed {@code limit} is honored there for requested values up to 1000, but this class still
+ * validates the actual batch size rather than trusting the request parameter. Response array wire
+ * order is preserved exactly as received; no sort, reverse, deduplication, aggregation, or "latest"
+ * selection is performed anywhere in this class. No fetch method claims that any returned candle is
+ * closed rather than still forming.
+ *
+ * <p>The bounded-range kline fetch ({@link #fetchBtcUsdt15mCandlesInRange(long, long)}) adds
+ * {@code startTime}/{@code endTime} query parameters over the same endpoint. Live discovery
+ * (Candidate 20 / Issue #46, decision {@code docs/11_DECISION_LOG.md} D015) confirmed that, when
+ * both are supplied together, BingX applies a half-open {@code [startTime, endTime)} filter on
+ * candle open time and silently truncates &mdash; keeping only the newest rows, with no error
+ * signal &mdash; once the implied row count would exceed the verified 1000-row cap. This method
+ * therefore requires both bounds to be 15-minute-grid-aligned and the span to cover at most 1000
+ * candles, so that silent truncation is structurally unreachable rather than merely detected after
+ * the fact. This is intentionally narrower than what the exchange itself accepts.
  *
  * <p>This class carries no credentials, no signing, no account/order authority, no scheduler or
  * runtime loop, and no persistence. It is not a market-data collection service and does not claim
@@ -60,6 +70,26 @@ public final class BingxPublicMarketDataClient {
     private static final int MAX_DECIMAL_LENGTH = 64;
     private static final int MAX_BATCH_SIZE = 1000;
 
+    /** The 15-minute candle grid width in milliseconds; every observed candle open time is a multiple of this. */
+    static final long CANDLE_INTERVAL_MILLIS = 900_000L;
+
+    /**
+     * The largest {@code endTimeEpochMs - startTimeEpochMs} span guaranteed not to require more
+     * than {@link #MAX_BATCH_SIZE} candles, and therefore guaranteed not to trigger the silent
+     * newest-anchored truncation confirmed by live discovery (Candidate 20 / D015).
+     */
+    static final long MAX_RANGE_MILLIS = (long) MAX_BATCH_SIZE * CANDLE_INTERVAL_MILLIS;
+
+    /**
+     * The live-observed exchange ceiling on {@code endTime} (D015): a request above this was
+     * rejected server-side with {@code code=109400} during Candidate 20 live validation. This is
+     * not drawn from an official documented contract &mdash; the interactive API docs were
+     * inaccessible as a JS-rendered SPA at the time &mdash; so it is checked client-side as a
+     * conservative guard, failing before any transport call, consistent with every other {@code
+     * validateRange} check.
+     */
+    static final long MAX_END_TIME_EPOCH_MILLIS = 17_514_115_200_000L;
+
     /** Mirrors {@code com.ptengine.contract.json.ContractJsonCodec}'s positive-decimal pattern exactly. */
     private static final Pattern POSITIVE_DECIMAL_PATTERN =
             Pattern.compile("^(?:0\\.(?:0*[1-9]\\d*)|[1-9]\\d*(?:\\.\\d+)?)$");
@@ -70,6 +100,7 @@ public final class BingxPublicMarketDataClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    private final URI validatedBaseUri;
     private final URI tradesTarget;
     private final URI candlesTarget;
     private final Transport transport;
@@ -79,7 +110,7 @@ public final class BingxPublicMarketDataClient {
     }
 
     BingxPublicMarketDataClient(URI baseUri, Transport transport) {
-        URI validatedBaseUri = validateBaseUri(baseUri);
+        this.validatedBaseUri = validateBaseUri(baseUri);
         this.tradesTarget = buildTargetUri(validatedBaseUri, TRADES_REQUEST_PATH, TRADES_REQUEST_QUERY);
         this.candlesTarget = buildTargetUri(validatedBaseUri, CANDLES_REQUEST_PATH, CANDLES_REQUEST_QUERY);
         this.transport = Objects.requireNonNull(transport, "transport");
@@ -110,6 +141,92 @@ public final class BingxPublicMarketDataClient {
     public List<BingxPerpetualCandle> fetchRecentBtcUsdt15mCandles() {
         byte[] body = fetch(candlesTarget);
         return parseCandleBatch(decodeStrictUtf8(body));
+    }
+
+    /**
+     * Issues exactly one {@code GET} to {@code
+     * /openApi/swap/v3/quote/klines?symbol=BTC-USDT&interval=15m&startTime=<startTimeEpochMs>&endTime=<endTimeEpochMs>&limit=1000}
+     * for one caller-supplied, client-validated 15-minute-aligned time range, and returns the
+     * response batch as an immutable, wire-order-preserving list.
+     *
+     * <p>Both {@code startTimeEpochMs} and {@code endTimeEpochMs} must be non-negative exact
+     * multiples of {@value #CANDLE_INTERVAL_MILLIS} (15 minutes in milliseconds &mdash; the same
+     * grid every candle open time is observed on), with {@code endTimeEpochMs} strictly greater
+     * than {@code startTimeEpochMs} and the span not exceeding 1000 candles
+     * ({@value #MAX_RANGE_MILLIS} milliseconds). This bound is intentionally narrower than what the
+     * exchange itself accepts: live discovery (Candidate 20 / Issue #46, D015) confirmed the
+     * exchange applies a half-open {@code [startTime, endTime)} filter on candle open time when
+     * both parameters are supplied, and silently keeps only the newest candles &mdash; dropping the
+     * oldest ones with no error signal &mdash; once the implied count would exceed 1000. This
+     * method's validation exists to make that silent-truncation case unreachable, not merely to
+     * detect it afterward.
+     *
+     * <p>Unlike {@link #fetchRecentBtcUsdt15mCandles()}, an empty result is a legitimate outcome of
+     * this method (both a fully-future range and a range before market data existed were confirmed
+     * live to return a successful empty batch) and does not throw.
+     *
+     * @throws BingxPublicMarketDataException on invalid arguments (before any transport call is
+     *     made), or on any transport failure, non-200 status, oversized body, malformed/invalid
+     *     JSON, envelope/business-code rejection, out-of-bounds batch size, a returned candle whose
+     *     open time falls outside {@code [startTimeEpochMs, endTimeEpochMs)}, a returned candle whose
+     *     open time is not aligned to the 15-minute candle grid, or per-candle field validation failure
+     */
+    public List<BingxPerpetualCandle> fetchBtcUsdt15mCandlesInRange(long startTimeEpochMs, long endTimeEpochMs) {
+        validateRange(startTimeEpochMs, endTimeEpochMs);
+        URI target =
+                buildTargetUri(validatedBaseUri, CANDLES_REQUEST_PATH, rangeQuery(startTimeEpochMs, endTimeEpochMs));
+        byte[] body = fetch(target);
+        return parseCandleRangeBatch(decodeStrictUtf8(body), startTimeEpochMs, endTimeEpochMs);
+    }
+
+    private static String rangeQuery(long startTimeEpochMs, long endTimeEpochMs) {
+        return "symbol=BTC-USDT&interval=15m&startTime="
+                + startTimeEpochMs
+                + "&endTime="
+                + endTimeEpochMs
+                + "&limit=1000";
+    }
+
+    private static void validateRange(long startTimeEpochMs, long endTimeEpochMs) {
+        if (startTimeEpochMs < 0) {
+            throw new BingxPublicMarketDataException(
+                    "startTimeEpochMs must be non-negative, was: " + startTimeEpochMs);
+        }
+        if (endTimeEpochMs < 0) {
+            throw new BingxPublicMarketDataException("endTimeEpochMs must be non-negative, was: " + endTimeEpochMs);
+        }
+        requireGridAligned(startTimeEpochMs, "startTimeEpochMs");
+        requireGridAligned(endTimeEpochMs, "endTimeEpochMs");
+        if (endTimeEpochMs > MAX_END_TIME_EPOCH_MILLIS) {
+            throw new BingxPublicMarketDataException(
+                    "endTimeEpochMs exceeds the live-observed exchange maximum of "
+                            + MAX_END_TIME_EPOCH_MILLIS + ", was: " + endTimeEpochMs);
+        }
+        if (endTimeEpochMs <= startTimeEpochMs) {
+            throw new BingxPublicMarketDataException(
+                    "endTimeEpochMs must be strictly greater than startTimeEpochMs, was startTimeEpochMs="
+                            + startTimeEpochMs + ", endTimeEpochMs=" + endTimeEpochMs);
+        }
+        // Safe because startTimeEpochMs and endTimeEpochMs are already both validated non-negative
+        // and endTimeEpochMs > startTimeEpochMs above: this subtraction cannot overflow for any
+        // representable long inputs, unlike an addition-based bound check would risk.
+        long rangeMillis = endTimeEpochMs - startTimeEpochMs;
+        if (rangeMillis > MAX_RANGE_MILLIS) {
+            throw new BingxPublicMarketDataException(
+                    "requested range of " + rangeMillis + " milliseconds exceeds the safe single-request bound of "
+                            + MAX_BATCH_SIZE + " candles (" + MAX_RANGE_MILLIS + " milliseconds)");
+        }
+    }
+
+    private static void requireGridAligned(long value, String fieldName) {
+        if (value % CANDLE_INTERVAL_MILLIS != 0) {
+            throw new BingxPublicMarketDataException(
+                    fieldName
+                            + " must be aligned to the 15-minute candle grid (a multiple of "
+                            + CANDLE_INTERVAL_MILLIS
+                            + "), was: "
+                            + value);
+        }
     }
 
     private byte[] fetch(URI target) {
@@ -204,6 +321,10 @@ public final class BingxPublicMarketDataClient {
     }
 
     private static JsonNode parseEnvelope(String json) {
+        return parseEnvelope(json, false);
+    }
+
+    private static JsonNode parseEnvelope(String json, boolean allowEmptyData) {
         JsonNode root;
         try (JsonParser parser = MAPPER.getFactory().createParser(json)) {
             root = MAPPER.readTree(parser);
@@ -238,7 +359,7 @@ public final class BingxPublicMarketDataClient {
         if (dataNode == null || !dataNode.isArray()) {
             throw new BingxPublicMarketDataException("data must be a JSON array");
         }
-        if (dataNode.isEmpty()) {
+        if (!allowEmptyData && dataNode.isEmpty()) {
             throw new BingxPublicMarketDataException("data must not be empty");
         }
         if (dataNode.size() > MAX_BATCH_SIZE) {
@@ -274,6 +395,38 @@ public final class BingxPublicMarketDataClient {
         List<BingxPerpetualCandle> candles = new ArrayList<>(dataNode.size());
         for (JsonNode candleNode : dataNode) {
             candles.add(parseCandle(candleNode));
+        }
+        return List.copyOf(candles);
+    }
+
+    /**
+     * Same as {@link #parseCandleBatch(String)}, except empty {@code data} is a legitimate success
+     * (per the locked range empty-result policy) and every parsed candle's {@code openTimeEpochMs}
+     * is independently checked against the 15-minute candle grid and the requested {@code
+     * [startTimeEpochMs, endTimeEpochMs)} bound, failing closed &mdash; rather than silently
+     * filtering &mdash; on any row that is misaligned, outside that bound, or on a batch larger
+     * than the range could possibly contain.
+     */
+    private static List<BingxPerpetualCandle> parseCandleRangeBatch(
+            String json, long startTimeEpochMs, long endTimeEpochMs) {
+        JsonNode dataNode = parseEnvelope(json, true);
+        long maxPossibleCandles = (endTimeEpochMs - startTimeEpochMs) / CANDLE_INTERVAL_MILLIS;
+        if (dataNode.size() > maxPossibleCandles) {
+            throw new BingxPublicMarketDataException(
+                    "data element count " + dataNode.size() + " exceeds the maximum of " + maxPossibleCandles
+                            + " candles possible for the requested range");
+        }
+        List<BingxPerpetualCandle> candles = new ArrayList<>(dataNode.size());
+        for (JsonNode candleNode : dataNode) {
+            BingxPerpetualCandle candle = parseCandle(candleNode);
+            requireGridAligned(candle.openTimeEpochMs(), "returned candle openTimeEpochMs");
+            if (candle.openTimeEpochMs() < startTimeEpochMs || candle.openTimeEpochMs() >= endTimeEpochMs) {
+                throw new BingxPublicMarketDataException(
+                        "returned candle openTimeEpochMs " + candle.openTimeEpochMs()
+                                + " falls outside the requested range [" + startTimeEpochMs + ", " + endTimeEpochMs
+                                + ")");
+            }
+            candles.add(candle);
         }
         return List.copyOf(candles);
     }
