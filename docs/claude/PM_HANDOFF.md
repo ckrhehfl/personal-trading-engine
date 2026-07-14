@@ -226,18 +226,22 @@ latest-head 판정은 **C'**를 따로 실행해야 한다.
 **C'. 실제 security-gates 게이트 실행 (latest-head, self-test 아님)**
 
 ```bash
-BASE_SHA="$(gh pr view <PR_NUMBER> --json baseRefOid --jq .baseRefOid)"
-HEAD_SHA="$(gh pr view <PR_NUMBER> --json headRefOid --jq .headRefOid)"
+: "${PR_NUMBER:?set PR_NUMBER to the target PR's number, e.g. PR_NUMBER=49}"
+[[ "$PR_NUMBER" =~ ^[0-9]+$ ]] || { echo "PR_NUMBER must be numeric"; exit 1; }
+BASE_SHA="$(gh pr view "$PR_NUMBER" --json baseRefOid --jq .baseRefOid)"
+HEAD_SHA="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
 [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "BASE_SHA is not a full SHA"; exit 1; }
 [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "HEAD_SHA is not a full SHA"; exit 1; }
 python3 scripts/ci/security_gates.py --base "$BASE_SHA" --head "$HEAD_SHA"
 ```
 
-`BASE_SHA`/`HEAD_SHA`는 검증 대상 PR에서 직접 조회해 변수로 고정하고, 둘 다
-40자 hex SHA 형태인지 확인한 뒤에만 스크립트에 넘긴다 — 이 자리에 `<...>`
-placeholder 문자열을 그대로 셸에 붙여넣으면 `<`가 입력 리다이렉션으로
-오해석되므로 이 형태를 쓰지 않는다. `scripts/ci/security_gates.py` 자체도
-`HEAD` 같은 symbolic ref를 2차로 거부한다(fail-closed). CI에서는
+`PR_NUMBER`는 실행 전에 환경변수로 설정하고(`: "${VAR:?...}"`가 미설정 시
+즉시 실패시킨다) 숫자 형식인지 검증한 뒤에만 `gh pr view`에 넘긴다.
+`BASE_SHA`/`HEAD_SHA`도 그 조회 결과를 변수로 고정하고 40자 hex SHA
+형태인지 확인한 뒤에만 스크립트에 넘긴다 — 이 문서 어디에도 `<...>`
+angle-bracket placeholder를 셸 커맨드 안에 남기지 않는다(그 형태를 그대로
+붙여넣으면 `<`가 입력 리다이렉션으로 오해석된다). `scripts/ci/security_gates.py`
+자체도 `HEAD` 같은 symbolic ref를 2차로 거부한다(fail-closed). CI에서는
 `.github/workflows/security-gates.yml`이 동일 스크립트를 PR의 실제
 base/head로 실행한다 — 그 워크플로 run의 결과가 latest-head 판정의
 근거다.
