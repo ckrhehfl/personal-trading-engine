@@ -226,14 +226,21 @@ latest-head 판정은 **C'**를 따로 실행해야 한다.
 **C'. 실제 security-gates 게이트 실행 (latest-head, self-test 아님)**
 
 ```bash
-python3 scripts/ci/security_gates.py --base <BASE_SHA> --head <HEAD_SHA>
+BASE_SHA="$(gh pr view <PR_NUMBER> --json baseRefOid --jq .baseRefOid)"
+HEAD_SHA="$(gh pr view <PR_NUMBER> --json headRefOid --jq .headRefOid)"
+[[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "BASE_SHA is not a full SHA"; exit 1; }
+[[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "HEAD_SHA is not a full SHA"; exit 1; }
+python3 scripts/ci/security_gates.py --base "$BASE_SHA" --head "$HEAD_SHA"
 ```
 
-`<BASE_SHA>`/`<HEAD_SHA>`는 검증 대상 PR의 정확한 base/head 커밋이어야
-한다(둘 다 SHA 형태만 허용 — 스크립트가 `HEAD` 같은 symbolic ref를
-거부한다). CI에서는 `.github/workflows/security-gates.yml`이 동일 스크립트를
-PR의 실제 base/head로 실행한다 — 그 워크플로 run의 결과가 latest-head
-판정의 근거다.
+`BASE_SHA`/`HEAD_SHA`는 검증 대상 PR에서 직접 조회해 변수로 고정하고, 둘 다
+40자 hex SHA 형태인지 확인한 뒤에만 스크립트에 넘긴다 — 이 자리에 `<...>`
+placeholder 문자열을 그대로 셸에 붙여넣으면 `<`가 입력 리다이렉션으로
+오해석되므로 이 형태를 쓰지 않는다. `scripts/ci/security_gates.py` 자체도
+`HEAD` 같은 symbolic ref를 2차로 거부한다(fail-closed). CI에서는
+`.github/workflows/security-gates.yml`이 동일 스크립트를 PR의 실제
+base/head로 실행한다 — 그 워크플로 run의 결과가 latest-head 판정의
+근거다.
 
 **D. Targeted evidence (검증된 클래스/모듈명)**
 
