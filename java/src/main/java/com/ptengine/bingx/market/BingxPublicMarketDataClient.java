@@ -168,8 +168,8 @@ public final class BingxPublicMarketDataClient {
      * @throws BingxPublicMarketDataException on invalid arguments (before any transport call is
      *     made), or on any transport failure, non-200 status, oversized body, malformed/invalid
      *     JSON, envelope/business-code rejection, out-of-bounds batch size, a returned candle whose
-     *     open time falls outside {@code [startTimeEpochMs, endTimeEpochMs)}, or per-candle field
-     *     validation failure
+     *     open time falls outside {@code [startTimeEpochMs, endTimeEpochMs)}, a returned candle whose
+     *     open time is not aligned to the 15-minute candle grid, or per-candle field validation failure
      */
     public List<BingxPerpetualCandle> fetchBtcUsdt15mCandlesInRange(long startTimeEpochMs, long endTimeEpochMs) {
         validateRange(startTimeEpochMs, endTimeEpochMs);
@@ -195,16 +195,8 @@ public final class BingxPublicMarketDataClient {
         if (endTimeEpochMs < 0) {
             throw new BingxPublicMarketDataException("endTimeEpochMs must be non-negative, was: " + endTimeEpochMs);
         }
-        if (startTimeEpochMs % CANDLE_INTERVAL_MILLIS != 0) {
-            throw new BingxPublicMarketDataException(
-                    "startTimeEpochMs must be aligned to the 15-minute candle grid (a multiple of "
-                            + CANDLE_INTERVAL_MILLIS + "), was: " + startTimeEpochMs);
-        }
-        if (endTimeEpochMs % CANDLE_INTERVAL_MILLIS != 0) {
-            throw new BingxPublicMarketDataException(
-                    "endTimeEpochMs must be aligned to the 15-minute candle grid (a multiple of "
-                            + CANDLE_INTERVAL_MILLIS + "), was: " + endTimeEpochMs);
-        }
+        requireGridAligned(startTimeEpochMs, "startTimeEpochMs");
+        requireGridAligned(endTimeEpochMs, "endTimeEpochMs");
         if (endTimeEpochMs > MAX_END_TIME_EPOCH_MILLIS) {
             throw new BingxPublicMarketDataException(
                     "endTimeEpochMs exceeds the live-observed exchange maximum of "
@@ -223,6 +215,17 @@ public final class BingxPublicMarketDataClient {
             throw new BingxPublicMarketDataException(
                     "requested range of " + rangeMillis + " milliseconds exceeds the safe single-request bound of "
                             + MAX_BATCH_SIZE + " candles (" + MAX_RANGE_MILLIS + " milliseconds)");
+        }
+    }
+
+    private static void requireGridAligned(long value, String fieldName) {
+        if (value % CANDLE_INTERVAL_MILLIS != 0) {
+            throw new BingxPublicMarketDataException(
+                    fieldName
+                            + " must be aligned to the 15-minute candle grid (a multiple of "
+                            + CANDLE_INTERVAL_MILLIS
+                            + "), was: "
+                            + value);
         }
     }
 
@@ -416,13 +419,7 @@ public final class BingxPublicMarketDataClient {
         List<BingxPerpetualCandle> candles = new ArrayList<>(dataNode.size());
         for (JsonNode candleNode : dataNode) {
             BingxPerpetualCandle candle = parseCandle(candleNode);
-            if (candle.openTimeEpochMs() % CANDLE_INTERVAL_MILLIS != 0) {
-                throw new BingxPublicMarketDataException(
-                        "returned candle openTimeEpochMs must be aligned to the 15-minute candle grid (a multiple of "
-                                + CANDLE_INTERVAL_MILLIS
-                                + "), was: "
-                                + candle.openTimeEpochMs());
-            }
+            requireGridAligned(candle.openTimeEpochMs(), "returned candle openTimeEpochMs");
             if (candle.openTimeEpochMs() < startTimeEpochMs || candle.openTimeEpochMs() >= endTimeEpochMs) {
                 throw new BingxPublicMarketDataException(
                         "returned candle openTimeEpochMs " + candle.openTimeEpochMs()
