@@ -85,6 +85,14 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 15. human final merge action
 16. handoff 갱신(`docs/claude/PM_HANDOFF.md`, 필요 시)
 
+> 14번 항목(latest-head review completeness)은 구현한 세션 자신의 self-check
+> 외에, 독립적인 fresh-context subagent(`pr-auditor`, 아래 F.1 표와
+> `docs/claude/CLAUDE_OPERATING_MODEL.md` §13 참고)로도 수행할 수 있다.
+> `pr-auditor`는 구현 세션과 대화 맥락을 전혀 공유하지 않고 GitHub 상태를
+> 스스로 다시 조회해 `docs/claude/CODERABBIT_REVIEW_MODEL.md` §9 체크리스트를
+> 판정하며, 판정을 PR에 댓글로 직접 게시한다(`/audit-pr <PR번호>`). merge
+> 권한은 없다 — 여전히 15번(human final merge action)이 최종 결정이다.
+
 ---
 
 ## E. Hybrid rule
@@ -100,8 +108,8 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 
 | 항목 | 상태 |
 |---|---|
-| Project subagents | **구현됨** (`.claude/agents/*.md`, 5개 read-only reviewer, 아래 F.1 참고) |
-| Skills / slash commands | **구현됨** (`.claude/skills/review-*/SKILL.md`, 5개 manual-only reviewer skill, 아래 F.2 참고) |
+| Project subagents | **구현됨** (`.claude/agents/*.md`, 5개 read-only domain reviewer + 1개 read-only-files/read-only-GitHub `pr-auditor`, 아래 F.1 참고) |
+| Skills / slash commands | **구현됨** (`.claude/skills/review-*/SKILL.md` 5개 + `.claude/skills/audit-pr/SKILL.md` 1개, 전부 manual-only, 아래 F.2 참고) |
 | Hooks / permissions | **구현됨** (`.claude/settings.json` deny rules + PreToolUse policy guard hook, 아래 F.2 참고) |
 | Implementation agents | 미구현 |
 | `CodeRabbit` required check | 구현됨 (PR #1) |
@@ -128,9 +136,14 @@ authority도 아니다.
 | Python research / backtest | `python-research-reviewer` + `test-reviewer` |
 | risk / R4-adjacent | `risk-reviewer` |
 | cross-language / high-risk runtime 변경 | `architecture-reviewer` + 해당 domain reviewer + second AI reviewer policy(`docs/claude/CLAUDE_OPERATING_MODEL.md` §9) |
+| PR merge-readiness 독립 감사 (§9 latest-head review completeness) | `pr-auditor` |
 
-이 subagent들의 상세 tool boundary와 역할 설명은
-`docs/claude/CLAUDE_OPERATING_MODEL.md`를 본다.
+`pr-auditor`는 위 5개와 성격이 다르다 — 코드 품질이 아니라 "이 PR을 지금
+merge해도 되는가"만 판정하며, 그 판정에 필요한 정보(CI 상태, CodeRabbit
+review 이력, unresolved thread)가 로컬 파일이 아니라 GitHub에만 존재하기
+때문에 `Bash`(읽기 전용 `gh`/`git` 명령 한정 + 판정 댓글 게시 1건만 예외)가
+추가로 필요하다. 상세 tool boundary와 5개 reviewer와의 차이는
+`docs/claude/CLAUDE_OPERATING_MODEL.md` §13을 본다.
 
 ### F.2 Implemented project skills and permission/hook guardrails (PR #5)
 
@@ -148,13 +161,20 @@ manual-only project skill이 `.claude/skills/review-*/SKILL.md`에 구현되어
 | `/review-backtest` | `python-research-reviewer` |
 | `/review-risk` | `risk-reviewer` |
 | `/review-tests` | `test-reviewer` |
+| `/audit-pr <PR번호>` | `pr-auditor` |
 
 이 skill들은 side-effect가 없는 **wrapper**다. 파일을 만들거나 수정하지 않고,
-새 권한을 부여하지 않으며, 감싸는 reviewer agent의 tool boundary(`Read`,
-`Grep`, `Glob`만)를 그대로 상속한다. `allowed-tools` 사전 승인, skill-scoped
-hook, `!` shell injection은 사용하지 않는다. 이 저장소는 `.claude/commands/`
-대신 이 skill 형식을 사용한다(현재 Claude Code 버전에서 두 형식이 동등하게
-동작하므로, project custom command는 전부 skill로 구현한다).
+새 권한을 부여하지 않으며, 감싸는 reviewer agent의 tool boundary를 그대로
+상속한다. `allowed-tools` 사전 승인, skill-scoped hook, `!` shell injection은
+사용하지 않는다. 이 저장소는 `.claude/commands/` 대신 이 skill 형식을
+사용한다(현재 Claude Code 버전에서 두 형식이 동등하게 동작하므로, project
+custom command는 전부 skill로 구현한다).
+
+`/audit-pr`만 예외가 하나 있다: 감싸는 `pr-auditor`가 판정을 GitHub PR에
+댓글로 게시하는 것 자체가 이 skill의 목적이므로, "파일을 만들거나 수정하지
+않는다"는 유지되지만 "GitHub에 아무 흔적을 남기지 않는다"는 유지되지 않는다
+— 그 유일한 쓰기 동작(`gh pr comment`)은 `pr-auditor` 자체 정의(§F.1)에
+명시적으로 한정되어 있다.
 
 같은 PR에서 `.claude/settings.json`에 project 수준 **deny-only permission
 규칙**과 단일 **PreToolUse policy guard hook**(`.claude/hooks/policy_guard.py`,
