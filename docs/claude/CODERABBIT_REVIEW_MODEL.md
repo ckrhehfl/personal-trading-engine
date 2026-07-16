@@ -193,3 +193,54 @@ SHA"에 대한 판정**이며, 다음을 **모두** 확인해야 한다.
 
 위 전부가 "예"일 때만 `READY_TO_MERGE`로 보고한다. 하나라도 확인하지 못했거나
 "아니오"이면 `REVIEW_PENDING` 또는 `BLOCKED`로 보고한다.
+
+---
+
+## 10. CodeRabbit Autofix
+
+이 저장소는 CodeRabbit **Pro** 플랜을 사용 중이며 Autofix 기능이 활성화되어
+있다(2026-07-16 확인). 이 절은 그 상태를 "기본값이라 켜져 있음"에서
+"의도적으로 켜두고 규칙을 정함"으로 바꾸는 governance 결정을 기록한다.
+
+### 10.1 설정
+
+`.coderabbit.yaml`의 `reviews.finishing_touches.autofix.enabled: true`로
+명시한다. 이것이 CodeRabbit config schema에 존재하는 유일한 Autofix 옵션이며,
+direct-commit vs stacked PR 선택은 config가 아니라 PR 코멘트 명령
+(`@coderabbitai autofix` / `@coderabbitai autofix stacked pr`)으로만
+제어된다 — 심각도·경로·finding 종류에 대한 config 수준 scoping 옵션은
+CodeRabbit에 존재하지 않는다.
+
+### 10.2 사용 규칙
+
+- **`@coderabbitai autofix`(direct-commit 모드)만 사용한다. `stacked pr`
+  모드는 사용하지 않는다.** `docs/claude/CLAUDE_OPERATING_MODEL.md` §5의
+  "기존에 열려 있는 PR에 대한 fix는 같은 worktree/branch에 commit한다"는
+  규칙과 일치시키기 위함이다 — stacked PR은 이 규칙을 벗어나는 별도 PR을
+  새로 만든다.
+- CodeRabbit이 남긴 finding 중 기계적/정형적인 것(포맷팅, 단순 오탈자, 단순
+  리팩터링 제안 등)은 Claude가 직접 고치기 전에 먼저 Autofix 호출을
+  시도한다. Autofix가 처리하지 못했거나 남은 finding만 Claude가 직접
+  수정한다(`docs/09_CLAUDE_WORKFLOW.md` §D-13).
+- **위험 판단이 필요한 finding**(live/leverage/risk/secret 관련, Java
+  OMS/Risk Gateway 로직, schema breaking change 등 R2 이상)은 Autofix를
+  호출하지 않는다. Autofix는 리뷰 판단을 하지 않고 제안을 기계적으로
+  적용할 뿐이므로, 판단이 필요한 finding은 처음부터 Claude 또는 사람이
+  직접 처리한다.
+
+### 10.3 재검증 — 특별 취급 없음
+
+Autofix가 만든 커밋도 다른 어떤 커밋과 **동일하게** 2절 기본 gate와 9절
+Latest-Head Review Completeness 전체를 새 head SHA 기준으로 다시 통과해야
+한다. "AI가 자동으로 고쳤으니 재검증을 생략한다"는 예외는 존재하지 않는다 —
+9절의 "새 commit이 push되면 이전의 모든 readiness 판정은 즉시 무효" 규칙은
+커밋 작성자가 아니라 head SHA만을 기준으로 하므로, 별도 수정 없이 Autofix
+커밋에도 그대로 적용된다.
+
+### 10.4 알려진 한계
+
+- Autofix도 CodeRabbit 리뷰의 연장선인 AI 산출물이다 — 6절 "CodeRabbit은
+  완벽하지 않다" 원칙이 동일하게 적용된다.
+- Autofix의 실제 plan-tier 활성 상태는 CodeRabbit 대시보드에서만 확인
+  가능하다. `.coderabbit.yaml`의 `enabled: true`는 이 저장소의 의도를
+  기록할 뿐, 실제 plan 활성 여부 자체를 강제하지 않는다.
