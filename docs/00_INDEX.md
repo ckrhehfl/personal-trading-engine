@@ -32,7 +32,7 @@
 | Git policy | `docs/SECRET_AND_GIT_POLICY.md` | `../CLAUDE.md` |
 | Review governance | `docs/claude/CODERABBIT_REVIEW_MODEL.md` | `.coderabbit.yaml`, `.github/workflows/security-gates.yml` |
 | Reviewer agents | `.claude/agents/*.md` | `docs/09_CLAUDE_WORKFLOW.md` §F.1 |
-| Reviewer skills | `.claude/skills/review-*/SKILL.md` | `docs/09_CLAUDE_WORKFLOW.md` §F.2 |
+| Reviewer skills | `.claude/skills/review-*/SKILL.md`, `.claude/skills/audit-pr/SKILL.md` | `docs/09_CLAUDE_WORKFLOW.md` §F.2 |
 | Project settings | `.claude/settings.json`, `.claude/hooks/policy_guard.py` | `docs/claude/CLAUDE_OPERATING_MODEL.md` §14 |
 
 D011은 MVP v0.1 공유 계약 형식으로 JSON Schema Draft 2020-12를 선택했다. Protobuf는 측정 가능한 필요가 생길 때까지 연기한다.
