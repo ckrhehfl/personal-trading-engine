@@ -87,15 +87,20 @@ on GitHub, at its current head SHA, using only commands you run yourself.
    a passing one.
 3. `gh api repos/{owner}/{repo}/pulls/<N>/reviews` — list **all** review
    submissions across the PR's entire history, not just the most recent
-   one. For every `CHANGES_REQUESTED` or `COMMENTED` review, determine
-   independently — do not assume a later `APPROVED` supersedes it — whether
-   it was left at (a) the current head SHA (still live) or (b) an earlier
-   head SHA superseded by a later commit (check via `commit_id` on the
-   review vs. the PR's current `headRefOid`, and whether GitHub itself
-   marked it `DISMISSED`). A `COMMENTED` review's body can contain
-   actionable findings even though `COMMENTED` never blocks
-   `reviewDecision` — read every `COMMENTED` review's body, do not skip it
-   because it isn't `CHANGES_REQUESTED`.
+   one. For every `CHANGES_REQUESTED` or `COMMENTED` review, do not treat a
+   `commit_id` that differs from the current `headRefOid` as proof by
+   itself that the finding is resolved — a differing `commit_id` only
+   means a later commit exists, not that the specific finding was actually
+   fixed in it. For each such review, cross-check against the PR's actual
+   current state: (a) is the corresponding review thread `isResolved`/
+   `isOutdated` per the GraphQL query in step 5, and (b) does `gh pr diff
+   <N>` at the current head show the finding's underlying concern still
+   present. Only treat a finding as no-longer-live if both checks confirm
+   it, or if GitHub itself marked the review `DISMISSED`. If you cannot
+   confirm resolution either way, do not report `READY_TO_MERGE`. A
+   `COMMENTED` review's body can contain actionable findings even though
+   `COMMENTED` never blocks `reviewDecision` — read every `COMMENTED`
+   review's body, do not skip it because it isn't `CHANGES_REQUESTED`.
 4. `gh api repos/{owner}/{repo}/pulls/<N>/comments` — inline/outside-diff
    review comments; note anything that reads as an unresolved finding.
 5. `gh api graphql` for `reviewThreads { isResolved isOutdated }` on this PR
