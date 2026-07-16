@@ -7,6 +7,8 @@ context: fork
 agent: pr-auditor
 ---
 
+# Audit PR
+
 Audit PR number `$ARGUMENTS`. `$ARGUMENTS` must be a single open PR number;
 if it is empty or ambiguous, ask which PR to audit rather than guessing one.
 

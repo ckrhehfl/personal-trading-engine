@@ -108,7 +108,7 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 
 | 항목 | 상태 |
 |---|---|
-| Project subagents | **구현됨** (`.claude/agents/*.md`, 5개 read-only domain reviewer + 1개 read-only-files/read-only-GitHub `pr-auditor`, 아래 F.1 참고) |
+| Project subagents | **구현됨** (`.claude/agents/*.md`, 5개 read-only domain reviewer + 1개 read-only-files/GitHub-read+comment-only `pr-auditor`, 아래 F.1 참고) |
 | Skills / slash commands | **구현됨** (`.claude/skills/review-*/SKILL.md` 5개 + `.claude/skills/audit-pr/SKILL.md` 1개, 전부 manual-only, 아래 F.2 참고) |
 | Hooks / permissions | **구현됨** (`.claude/settings.json` deny rules + PreToolUse policy guard hook, 아래 F.2 참고) |
 | Implementation agents | 미구현 |
