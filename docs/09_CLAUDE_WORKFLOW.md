@@ -80,8 +80,8 @@ issue 없이 진행할 수 있다. 그러나 이후 제품 코드(schema/Java/Py
 10. PR 생성
 11. `security-gates`
 12. CodeRabbit review
-13. 유효한 finding만 수정
-14. latest-head review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9)
+13. 기계적 finding은 CodeRabbit Autofix로 우선 처리 시도, 남은 유효한 finding만 Claude가 수정(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §10)
+14. latest-head review completeness 확인(`docs/claude/CODERABBIT_REVIEW_MODEL.md` §9) — Autofix 커밋도 예외 없이 포함
 15. human final merge action
 16. handoff 갱신(`docs/claude/PM_HANDOFF.md`, 필요 시)
 

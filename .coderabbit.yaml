@@ -27,6 +27,14 @@ reviews:
     drafts: false
     auto_incremental_review: true
 
+  # Autofix는 CodeRabbit 기본값(활성)을 이 저장소의 의도적 governance 결정으로
+  # 버전관리에 고정한 것이다 — 암묵적 기본값이 아니라 명시적 설정이다.
+  # 사용 규칙(direct-commit 전용, 위험 finding 제외, 재검증 의무)은
+  # docs/claude/CODERABBIT_REVIEW_MODEL.md §10을 따른다.
+  finishing_touches:
+    autofix:
+      enabled: true
+
   path_instructions:
     - path: "**"
       instructions: >-
